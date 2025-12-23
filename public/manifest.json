@@ -1,7 +1,8 @@
 {
   "name": "Colour Master",
   "short_name": "CM Tools",
-  "start_url": "/",
+  "start_url": "/Color-Master/",
+  "scope": "/Color-Master/",       
   "display": "standalone",
   "background_color": "#0B1F44",
   "theme_color": "#0B1F44",
