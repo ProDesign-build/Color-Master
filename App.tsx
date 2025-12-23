@@ -135,8 +135,20 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        <div className="flex-grow overflow-y-auto p-4 md:p-8 lg:p-10 pb-32 lg:pb-10">
-            <div className="max-w-6xl mx-auto h-full">
+        {/* 
+            Main Scroll Container:
+            - For Library: overflow-hidden because Library handles its own internal scroll.
+            - For others: overflow-y-auto to let the page scroll.
+            - pb-32: Adds bottom padding on mobile so content isn't hidden by the fixed nav.
+        */}
+        <div className={`flex-grow p-4 md:p-8 lg:p-10 ${
+            activeTab === 'library' 
+            ? 'overflow-hidden h-full' 
+            : 'overflow-y-auto pb-32 lg:pb-10'
+        }`}>
+            <div className={`max-w-6xl mx-auto ${
+                activeTab === 'library' ? 'h-full' : ''
+            } lg:h-full`}>
                 {activeTab === 'analyze' && (
                     <div className="grid lg:grid-cols-2 gap-8 lg:h-full">
                         <ColorCanvas onColorSelected={handleColorSelected} />
