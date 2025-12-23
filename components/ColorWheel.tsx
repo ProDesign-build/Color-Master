@@ -69,6 +69,11 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
   // --- Global Drag Handling ---
   useEffect(() => {
     const handleMove = (e: MouseEvent | TouchEvent) => {
+      // Critical for mobile: prevent scrolling while dragging sliders
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
       if (dragTarget === 'sb') handleSBMove(e);
       if (dragTarget === 'hue') handleHueMove(e);
     };
@@ -80,6 +85,7 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
     if (dragTarget) {
       window.addEventListener('mousemove', handleMove, { passive: false });
       window.addEventListener('mouseup', handleUp);
+      // passive: false is required to use preventDefault()
       window.addEventListener('touchmove', handleMove, { passive: false });
       window.addEventListener('touchend', handleUp);
     }
@@ -149,10 +155,16 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
            {/* Saturation/Brightness Box */}
            <div 
              ref={sbRef}
-             className="relative flex-grow h-full rounded-sm shadow-sm cursor-crosshair overflow-hidden border border-gray-300 ring-1 ring-gray-100"
+             className="relative flex-grow h-full rounded-sm shadow-sm cursor-crosshair overflow-hidden border border-gray-300 ring-1 ring-gray-100 touch-none"
              style={{ backgroundColor: hueColor }}
              onMouseDown={(e) => { setDragTarget('sb'); handleSBMove(e.nativeEvent); }}
-             onTouchStart={(e) => { setDragTarget('sb'); handleSBMove(e.nativeEvent); }}
+             onTouchStart={(e) => { 
+               // Prevent default browser touch actions (scrolling) immediately
+               // Note: 'touch-none' CSS class handles this for modern browsers, but this is a fallback safety
+               if(e.cancelable) e.preventDefault(); 
+               setDragTarget('sb'); 
+               handleSBMove(e.nativeEvent); 
+             }}
            >
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, #fff, transparent)' }} />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #000, transparent)' }} />
@@ -171,10 +183,14 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
            {/* Hue Slider */}
            <div 
              ref={hueRef}
-             className="relative w-10 h-full rounded-sm shadow-sm cursor-ns-resize border border-gray-300 ring-1 ring-gray-100"
+             className="relative w-10 h-full rounded-sm shadow-sm cursor-ns-resize border border-gray-300 ring-1 ring-gray-100 touch-none"
              style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}
              onMouseDown={(e) => { setDragTarget('hue'); handleHueMove(e.nativeEvent); }}
-             onTouchStart={(e) => { setDragTarget('hue'); handleHueMove(e.nativeEvent); }}
+             onTouchStart={(e) => { 
+                if(e.cancelable) e.preventDefault();
+                setDragTarget('hue'); 
+                handleHueMove(e.nativeEvent); 
+             }}
            >
               {/* Slider Handle arrows */}
               <div 
