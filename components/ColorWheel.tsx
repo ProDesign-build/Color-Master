@@ -188,9 +188,10 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
        </div>
 
        {/* Controls Area */}
-       <div className="grid grid-cols-[1fr_auto] gap-6">
-           {/* Values */}
-           <div className="space-y-3">
+       <div className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-4 sm:gap-6">
+           
+           {/* Values Section - Order 2 on mobile (bottom), Order 1 on Desktop */}
+           <div className="space-y-3 order-2 sm:order-1">
                <div className="flex gap-4">
                    <div className="space-y-2 flex-1">
                        <InputLabel label="H" value={Math.round(hsv.h)} max={360} suffix="°" onChange={(v) => updateFromInput('h', v)} />
@@ -206,20 +207,23 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                </div>
            </div>
 
-           {/* Hex & Preview */}
-           <div className="flex flex-col justify-between w-32">
-                <div className="flex flex-col gap-1">
+           {/* Hex & Preview Section - Order 1 on mobile (top), Order 2 on Desktop */}
+           <div className="flex sm:flex-col justify-between w-full sm:w-32 gap-4 sm:gap-0 order-1 sm:order-2">
+                
+                {/* Preview Box */}
+                <div className="flex flex-col gap-1 flex-1 sm:flex-initial">
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">New</label>
-                   <div className="h-12 w-full rounded border border-gray-200 shadow-sm" style={{ backgroundColor: color }} />
+                   <div className="h-10 sm:h-12 w-full rounded border border-gray-200 shadow-sm" style={{ backgroundColor: color }} />
                 </div>
                
-               <div className="flex flex-col gap-1 mt-auto">
+               {/* Hex Input */}
+               <div className="flex flex-col gap-1 mt-auto flex-1 sm:flex-initial">
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hex</label>
-                   <div className={`flex items-center border rounded-md bg-white shadow-sm transition-colors ${isHexFocused ? 'border-navy-900 ring-1 ring-navy-900/20' : 'border-gray-200'}`}>
+                   <div className={`flex items-center border rounded-md bg-white shadow-sm transition-colors h-10 sm:h-auto ${isHexFocused ? 'border-navy-900 ring-1 ring-navy-900/20' : 'border-gray-200'}`}>
                        <span className="pl-2 text-gray-400 font-mono text-xs">#</span>
                        <input 
                            type="text" 
-                           className="w-full bg-transparent p-1.5 font-mono text-sm text-navy-900 outline-none uppercase"
+                           className="w-full bg-transparent p-1.5 font-mono text-sm text-navy-900 outline-none uppercase min-w-0"
                            value={hexInput}
                            onChange={handleHexInputChange}
                            onFocus={() => setIsHexFocused(true)}
@@ -236,8 +240,8 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
 
 const InputLabel = ({ label, value, max, suffix, onChange }: { label: string, value: number, max: number, suffix?: string, onChange: (val: string) => void }) => (
     <div className="flex items-center gap-2 group">
-        <label className="text-xs font-bold text-gray-500 w-3">{label}</label>
-        <div className="flex-grow relative">
+        <label className="text-xs font-bold text-gray-500 w-3 shrink-0">{label}</label>
+        <div className="flex-grow relative min-w-0">
             <input 
                 type="number"
                 min={0}
@@ -247,7 +251,7 @@ const InputLabel = ({ label, value, max, suffix, onChange }: { label: string, va
                 className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-xs font-mono focus:border-gold-500 outline-none text-right shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
         </div>
-        {suffix && <span className="text-[10px] text-gray-400 w-3">{suffix}</span>}
+        {suffix && <span className="text-[10px] text-gray-400 w-3 shrink-0 text-right">{suffix}</span>}
     </div>
 );
 
