@@ -192,14 +192,14 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
            
            {/* Values Section - Order 2 on mobile (bottom), Order 1 on Desktop */}
            <div className="space-y-3 order-2 sm:order-1">
-               <div className="flex gap-4">
-                   <div className="space-y-2 flex-1">
+               <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-2">
                        <InputLabel label="H" value={Math.round(hsv.h)} max={360} suffix="°" onChange={(v) => updateFromInput('h', v)} />
                        <InputLabel label="S" value={Math.round(hsv.s)} max={100} suffix="%" onChange={(v) => updateFromInput('s', v)} />
                        <InputLabel label="B" value={Math.round(hsv.v)} max={100} suffix="%" onChange={(v) => updateFromInput('v', v)} />
                    </div>
-                   <div className="w-px bg-gray-200" />
-                   <div className="space-y-2 flex-1">
+                   
+                   <div className="space-y-2">
                        <InputLabel label="R" value={rgb.r} max={255} onChange={(v) => updateFromInput('r', v)} />
                        <InputLabel label="G" value={rgb.g} max={255} onChange={(v) => updateFromInput('g', v)} />
                        <InputLabel label="B" value={rgb.b} max={255} onChange={(v) => updateFromInput('b', v)} />
