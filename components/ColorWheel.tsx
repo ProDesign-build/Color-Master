@@ -53,16 +53,29 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
     handleColorChange({ ...hsv, s, v });
   }, [hsv]);
 
-  // --- Hue Interaction ---
+  // --- Hue Interaction (Adaptive: Horizontal on Mobile/Tablet, Vertical on Desktop) ---
   const handleHueMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!hueRef.current) return;
     const rect = hueRef.current.getBoundingClientRect();
-    const clientY = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientY;
-
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
     
-    // Top is 0 deg, Bottom is 360 deg
-    const h = Math.round(y * 360);
+    // Determine orientation based on aspect ratio (Width > Height = Horizontal)
+    const isHorizontal = rect.width > rect.height;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+
+    let h = 0;
+
+    if (isHorizontal) {
+        // Horizontal Slider (Mobile/Tablet)
+        const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        h = Math.round(x * 360);
+    } else {
+        // Vertical Slider (Large Desktop)
+        const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+        h = Math.round(y * 360);
+    }
+    
     handleColorChange({ ...hsv, h });
   }, [hsv]);
 
@@ -150,17 +163,16 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-lg mx-auto select-none p-2">
-       {/* Main Picker Area */}
-       <div className="flex gap-4 h-64">
+       {/* Main Picker Area: Column on Mobile/Tablet, Row on Desktop */}
+       <div className="flex flex-col xl:flex-row gap-4 h-auto xl:h-64">
+           
            {/* Saturation/Brightness Box */}
            <div 
              ref={sbRef}
-             className="relative flex-grow h-full rounded-sm shadow-sm cursor-crosshair overflow-hidden border border-gray-300 ring-1 ring-gray-100 touch-none"
+             className="relative w-full h-64 xl:h-full flex-grow rounded-sm shadow-sm cursor-crosshair overflow-hidden border border-gray-300 ring-1 ring-gray-100 touch-none"
              style={{ backgroundColor: hueColor }}
              onMouseDown={(e) => { setDragTarget('sb'); handleSBMove(e.nativeEvent); }}
              onTouchStart={(e) => { 
-               // Prevent default browser touch actions (scrolling) immediately
-               // Note: 'touch-none' CSS class handles this for modern browsers, but this is a fallback safety
                if(e.cancelable) e.preventDefault(); 
                setDragTarget('sb'); 
                handleSBMove(e.nativeEvent); 
@@ -180,11 +192,13 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
               />
            </div>
 
-           {/* Hue Slider */}
+           {/* Hue Slider: Horizontal on Mobile/Tablet, Vertical on Desktop */}
            <div 
              ref={hueRef}
-             className="relative w-10 h-full rounded-sm shadow-sm cursor-ns-resize border border-gray-300 ring-1 ring-gray-100 touch-none"
-             style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}
+             className="relative w-full h-12 xl:w-10 xl:h-full rounded-sm shadow-sm cursor-pointer border border-gray-300 ring-1 ring-gray-100 touch-none"
+             style={{ 
+                 // Gradient adapts to orientation via CSS classes
+             }}
              onMouseDown={(e) => { setDragTarget('hue'); handleHueMove(e.nativeEvent); }}
              onTouchStart={(e) => { 
                 if(e.cancelable) e.preventDefault();
@@ -192,9 +206,23 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                 handleHueMove(e.nativeEvent); 
              }}
            >
-              {/* Slider Handle arrows */}
+              {/* Gradient Backgrounds (Two overlapping divs to switch via CSS media queries logic not needed, we use CSS classes) */}
+              {/* Mobile/Tablet Gradient (Horizontal) */}
+              <div className="absolute inset-0 xl:hidden rounded-sm" 
+                   style={{ background: 'linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }} />
+              {/* Desktop Gradient (Vertical) */}
+              <div className="absolute inset-0 hidden xl:block rounded-sm" 
+                   style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }} />
+
+              {/* Slider Handle (Mobile/Tablet - Horizontal Bar) */}
               <div 
-                 className="absolute w-full left-0 h-0 pointer-events-none"
+                 className="absolute top-0 bottom-0 w-2 -ml-1 bg-white border border-gray-400 rounded-full shadow-md pointer-events-none xl:hidden"
+                 style={{ left: `${(hsv.h / 360) * 100}%` }}
+              />
+
+              {/* Slider Handle (Desktop - Vertical Arrows) */}
+              <div 
+                 className="absolute left-0 w-full h-0 pointer-events-none hidden xl:block"
                  style={{ top: `${(hsv.h / 360) * 100}%` }}
               >
                 <div className="absolute -left-1 -mt-1.5 border-l-[6px] border-l-gray-800 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent" />
@@ -204,10 +232,10 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
        </div>
 
        {/* Controls Area */}
-       <div className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-4 sm:gap-6">
+       <div className="flex flex-col xl:grid xl:grid-cols-[1fr_auto] gap-4 xl:gap-6">
            
-           {/* Values Section - Order 2 on mobile (bottom), Order 1 on Desktop */}
-           <div className="space-y-3 order-2 sm:order-1">
+           {/* Values Section - Order 2 on mobile/tablet (bottom), Order 1 on Desktop */}
+           <div className="space-y-3 order-2 xl:order-1">
                <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-2">
                        <InputLabel label="H" value={Math.round(hsv.h)} max={360} suffix="°" onChange={(v) => updateFromInput('h', v)} />
@@ -223,19 +251,19 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                </div>
            </div>
 
-           {/* Hex & Preview Section - Order 1 on mobile (top), Order 2 on Desktop */}
-           <div className="flex sm:flex-col justify-between w-full sm:w-32 gap-4 sm:gap-0 order-1 sm:order-2">
+           {/* Hex & Preview Section - Order 1 on mobile/tablet (top), Order 2 on Desktop */}
+           <div className="flex xl:flex-col justify-between w-full xl:w-32 gap-4 xl:gap-0 order-1 xl:order-2">
                 
                 {/* Preview Box */}
-                <div className="flex flex-col gap-1 flex-1 sm:flex-initial">
+                <div className="flex flex-col gap-1 flex-1 xl:flex-initial">
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">New</label>
-                   <div className="h-10 sm:h-12 w-full rounded border border-gray-200 shadow-sm" style={{ backgroundColor: color }} />
+                   <div className="h-10 xl:h-12 w-full rounded border border-gray-200 shadow-sm" style={{ backgroundColor: color }} />
                 </div>
                
                {/* Hex Input */}
-               <div className="flex flex-col gap-1 mt-auto flex-1 sm:flex-initial">
+               <div className="flex flex-col gap-1 mt-auto flex-1 xl:flex-initial">
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hex</label>
-                   <div className={`flex items-center border rounded-md bg-white shadow-sm transition-colors h-10 sm:h-auto ${isHexFocused ? 'border-navy-900 ring-1 ring-navy-900/20' : 'border-gray-200'}`}>
+                   <div className={`flex items-center border rounded-md bg-white shadow-sm transition-colors h-10 xl:h-auto ${isHexFocused ? 'border-navy-900 ring-1 ring-navy-900/20' : 'border-gray-200'}`}>
                        <span className="pl-2 text-gray-400 font-mono text-xs">#</span>
                        <input 
                            type="text" 
