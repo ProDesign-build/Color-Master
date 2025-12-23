@@ -1,20 +1,12 @@
-const CACHE_NAME = 'colour-master-v2';
+const CACHE_NAME = 'colour-master-v3'; // Bumped version to v3
 
-// Core assets to cache immediately on install
+// 1. URLs to cache immediately. 
+// NOTE: We removed .tsx files because they don't exist in the live app.
+// We only cache the "Skeleton" of the app here.
 const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/index.tsx',
-  '/App.tsx',
-  '/types.ts',
-  '/db.ts',
-  '/components/ColorCanvas.tsx',
-  '/components/LeatherPreview.tsx',
-  '/components/MixingCalculator.tsx',
-  '/components/Library.tsx',
-  '/components/ColorWheel.tsx',
-  '/components/ConfirmDialog.tsx',
-  '/manifest.json',
+  './', 
+  './index.html',
+  './manifest.json',
   'https://cdn.tailwindcss.com',
   'https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png',
   'https://i.postimg.cc/jRL3h8sN/Texture-v1.jpg'
@@ -45,30 +37,42 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: Stale-While-Revalidate Strategy
-// 1. Return from cache if available.
-// 2. Fetch from network and update cache.
-// 3. This ensures external CDNs (fonts, esm.sh) are cached as they are used.
+// Fetch Event: The "Brain" of the PWA
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests or browser-sync/hot-reload noise
-  if (event.request.method !== 'GET') return;
+  
+  // A. Handle Navigation Requests (HTML pages)
+  // If user navigates to /home or /mixing while offline, serve index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => {
+          return caches.match('./index.html');
+        })
+    );
+    return;
+  }
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          // Check if we received a valid response
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch(() => {
-           // Network failed
+  // B. Handle Assets (JS, CSS, Images) - Stale-While-Revalidate
+  // 1. Try to fetch from network & update cache
+  // 2. If network fails, fall back to cache
+  if (event.request.method === 'GET') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          const fetchPromise = fetch(event.request).then((networkResponse) => {
+            // Cache valid responses
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          }).catch(() => {
+            // Network failed, do nothing (we will return cachedResponse)
+          });
+
+          // Return cached response if we have it, otherwise wait for network
+          return cachedResponse || fetchPromise;
         });
-
-        // Return cached response if found, otherwise wait for network
-        return cachedResponse || fetchPromise;
-      });
-    })
-  );
+      })
+    );
+  }
 });
