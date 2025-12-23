@@ -1,0 +1,23 @@
+{
+  "name": "Colour Master",
+  "short_name": "CM Tools",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1F44",
+  "theme_color": "#0B1F44",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
