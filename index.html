@@ -4,23 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
-    <!-- PWA Theme & Description -->
-    <meta name="theme-color" content="#0B1F44">
+    <meta name="theme-color" content="#ffffff">
     <meta name="description" content="Professional tool for artisans to sample colors, mix pigments, and manage formulas.">
     
-    <!-- PWA Manifest & Icons -->
     <link rel="manifest" href="/Color-Master/manifest.json">
     <link rel="icon" href="https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png" />
     <link rel="apple-touch-icon" href="https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png">
     
-    <!-- iOS Specific PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Colour Master">
     
     <title>Colour Master</title>
     
-    <!-- External Libs (Will be cached by SW) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,19 +27,9 @@
         theme: {
           extend: {
             colors: {
-              navy: {
-                900: '#0B1F44',
-                800: '#152C55',
-              },
-              gold: {
-                400: '#E5C558',
-                500: '#D4AF37',
-                600: '#B59328',
-              },
-              cream: {
-                50: '#F9F7F3',
-                100: '#F0EAE0',
-              }
+              navy: { 900: '#0B1F44', 800: '#152C55' },
+              gold: { 400: '#E5C558', 500: '#D4AF37', 600: '#B59328' },
+              cream: { 50: '#F9F7F3', 100: '#F0EAE0' }
             },
             fontFamily: {
               sans: ['Montserrat', 'sans-serif'],
@@ -52,56 +38,73 @@
         }
       }
     </script>
+
     <style>
-        body {
-            background-color: #F9F7F3;
-            color: #0B1F44;
-            overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        /* Force browser canvas to White so no yellow bars appear */
+        html {
+            background-color: #ffffff; 
+            height: 100%;
+            overscroll-behavior-y: contain; /* Stop pull-to-refresh */
         }
-        /* Custom scrollbar for a cleaner artisan look */
+
+        /* Set Body to White and handle scrolling */
+        body {
+            background-color: #ffffff;
+            color: #0B1F44;
+            margin: 0;
+            min-height: 100%;
+            width: 100%;
+            overflow-x: hidden; /* No side scrolling */
+            touch-action: manipulation;
+        }
+
+        /* SCROLLBAR FIX: Make the track White (invisible) */
         ::-webkit-scrollbar {
             width: 8px;
+            background-color: #ffffff; /* 👈 This hides the yellow bar */
         }
+
         ::-webkit-scrollbar-track {
-            background: #F0EAE0;
+            background: #ffffff; /* 👈 Ensure track is white too */
         }
+
+        /* Keep your Gold Handle (Thumb) because it looks nice! */
         ::-webkit-scrollbar-thumb {
             background: #D4AF37;
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: #B59328;
         }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "uuid": "https://esm.sh/uuid@^13.0.0",
-    "dexie": "https://esm.sh/dexie@^4.2.1",
-    "colord": "https://esm.sh/colord@^2.9.3",
-    "dexie-react-hooks": "https://esm.sh/dexie-react-hooks@^4.2.0"
-  }
-}
-</script>
 
-<style>
-  html, body {
-    overscroll-behavior-y: contain;
-    width: 100%;
-    height: 100%;
-    overflow-x: hidden; /* Prevents side-scrolling */
-  }
-</style>
-</head>
+        /* Optional: Hide scrollbar completely on mobile */
+        @media (max-width: 768px) {
+            ::-webkit-scrollbar {
+                display: none;
+            }
+        }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "uuid": "https://esm.sh/uuid@^13.0.0",
+        "dexie": "https://esm.sh/dexie@^4.2.1",
+        "colord": "https://esm.sh/colord@^2.9.3",
+        "dexie-react-hooks": "https://esm.sh/dexie-react-hooks@^4.2.0"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
     
-    <!-- Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
