@@ -265,7 +265,7 @@ const Library: React.FC = () => {
                                                     className={`transition-all duration-200 ${
                                                         activeId === swatch.id 
                                                         ? 'opacity-100 pointer-events-auto text-navy-900' 
-                                                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'
+                                                        : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'
                                                     }`}
                                                 >
                                                     <Edit2 size={12}/>
@@ -277,8 +277,8 @@ const Library: React.FC = () => {
                                 </div>
                                 <div className={`flex gap-1 pl-2 transition-all duration-300 ${
                                     activeId === swatch.id 
-                                    ? 'opacity-100 translate-x-0' 
-                                    : 'opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
+                                    ? 'opacity-100 translate-x-0 pointer-events-auto' 
+                                    : 'opacity-0 translate-x-4 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto'
                                 }`}>
                                     <button onClick={(e) => { e.stopPropagation(); handleShareSwatch(swatch.name, swatch.hex); }} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors" title="Share Swatch"><Share2 size={16}/></button>
                                     <button onClick={(e) => { e.stopPropagation(); handleDownloadSwatch(swatch.name, swatch.hex); }} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors" title="Download High-Res Card"><Download size={16}/></button>
@@ -363,7 +363,7 @@ const Library: React.FC = () => {
                                                     className={`transition-all duration-200 ${
                                                         activeId === formula.id 
                                                         ? 'opacity-100 pointer-events-auto text-navy-900' 
-                                                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'
+                                                        : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'
                                                     }`}
                                                 >
                                                     <Edit2 size={12}/>
@@ -384,7 +384,7 @@ const Library: React.FC = () => {
                                         className={`p-2 rounded-lg transition-all ${
                                             activeId === formula.id
                                             ? 'opacity-100 pointer-events-auto text-gray-400 hover:text-red-500 hover:bg-red-50'
-                                            : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-gray-300 hover:text-red-500'
+                                            : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-300 hover:text-red-500'
                                         }`}
                                     >
                                         <Trash2 size={18}/>
