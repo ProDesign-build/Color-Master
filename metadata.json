@@ -1,0 +1,7 @@
+{
+  "name": "Colour Master PWA v2",
+  "description": "Professional tool for artisans to sample colors, mix pigments, and manage formulas.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
