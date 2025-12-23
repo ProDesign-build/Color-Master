@@ -220,14 +220,11 @@ const ColorWheel: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                  style={{ left: `${(hsv.h / 360) * 100}%` }}
               />
 
-              {/* Slider Handle (Desktop - Vertical Arrows) */}
+              {/* Slider Handle (Desktop - Vertical Bar) */}
               <div 
-                 className="absolute left-0 w-full h-0 pointer-events-none hidden xl:block"
+                 className="absolute left-0 right-0 h-2 -mt-1 bg-white border border-gray-400 rounded-full shadow-md pointer-events-none hidden xl:block"
                  style={{ top: `${(hsv.h / 360) * 100}%` }}
-              >
-                <div className="absolute -left-1 -mt-1.5 border-l-[6px] border-l-gray-800 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent" />
-                <div className="absolute -right-1 -mt-1.5 border-r-[6px] border-r-gray-800 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent" />
-              </div>
+              />
            </div>
        </div>
 
