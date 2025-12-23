@@ -238,13 +238,13 @@ const Library: React.FC = () => {
                                         <div className="min-w-0 flex-grow">
                                             <div className="font-bold text-navy-900 text-sm flex items-center gap-2 truncate">
                                                 {swatch.name}
-                                                <button onClick={() => startEditing(swatch.id!, swatch.name)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-navy-900 transition-opacity"><Edit2 size={12}/></button>
+                                                <button onClick={() => startEditing(swatch.id!, swatch.name)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-navy-900 transition-opacity pointer-events-none group-hover:pointer-events-auto"><Edit2 size={12}/></button>
                                             </div>
                                             <div className="text-[10px] text-gray-500 font-mono uppercase bg-gray-50 inline-block px-1.5 rounded mt-0.5 border border-gray-100">{swatch.hex}</div>
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2 pointer-events-none group-hover:pointer-events-auto">
                                     <button onClick={() => handleShareSwatch(swatch.name, swatch.hex)} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors" title="Share Swatch"><Share2 size={16}/></button>
                                     <button onClick={() => handleDownloadSwatch(swatch.name, swatch.hex)} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors" title="Download High-Res Card"><Download size={16}/></button>
                                     <button onClick={() => deleteSwatch(swatch.id!)} className="text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 size={16}/></button>
@@ -315,7 +315,7 @@ const Library: React.FC = () => {
                                                     <Droplet size={16} className="text-gold-500 flex-shrink-0" />
                                                 </div>
                                                 <span className="truncate" title={formula.name}>{formula.name}</span>
-                                                <button onClick={() => startEditing(formula.id!, formula.name)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-navy-900 transition-opacity"><Edit2 size={12}/></button>
+                                                <button onClick={() => startEditing(formula.id!, formula.name)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-navy-900 transition-opacity pointer-events-none group-hover:pointer-events-auto"><Edit2 size={12}/></button>
                                             </div>
                                         )}
                                         <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-wider font-medium flex gap-2">
@@ -327,7 +327,7 @@ const Library: React.FC = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    <button onClick={() => deleteFormula(formula.id!)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18}/></button>
+                                    <button onClick={() => deleteFormula(formula.id!)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all pointer-events-none group-hover:pointer-events-auto"><Trash2 size={18}/></button>
                                 </div>
                                 <div className="space-y-2 border-t border-gray-50 pt-3 mt-auto">
                                     <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Pigment Breakdown</div>

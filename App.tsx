@@ -136,7 +136,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-grow overflow-y-auto p-4 md:p-8 lg:p-10 pb-32 lg:pb-10">
-            <div className="max-w-6xl mx-auto h-full">
+            <div className="max-w-6xl mx-auto lg:h-full">
                 {activeTab === 'analyze' && (
                     <div className="grid lg:grid-cols-2 gap-8 lg:h-full">
                         <ColorCanvas onColorSelected={handleColorSelected} />
