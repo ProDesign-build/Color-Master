@@ -26,10 +26,6 @@ const ColorCanvas: React.FC<ColorCanvasProps> = ({ onColorSelected }) => {
   const [whiteReference, setWhiteReference] = useState<RgbaColor | null>(null);
   const [showCalibInfo, setShowCalibInfo] = useState(false);
 
-  // Focus State
-  const [isFocusing, setIsFocusing] = useState(false);
-  const [focusPos, setFocusPos] = useState({ x: 0, y: 0 });
-
   // Loupe / Interaction State
   const [loupe, setLoupe] = useState<{x: number, y: number, color: string, rawColor?: string} | null>(null);
 
@@ -125,49 +121,6 @@ const ColorCanvas: React.FC<ColorCanvasProps> = ({ onColorSelected }) => {
         setViewMode('sampler');
       }
     }
-  };
-
-  const handleTapFocus = async (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
-      // Prevent focus if we are clicking controls (handled by stopPropagation on buttons usually, but checking helps)
-      // Get coordinates
-      let clientX, clientY;
-      if ('touches' in e) {
-          clientX = e.touches[0].clientX;
-          clientY = e.touches[0].clientY;
-      } else {
-          clientX = (e as React.MouseEvent).clientX;
-          clientY = (e as React.MouseEvent).clientY;
-      }
-      
-      // Visual Feedback
-      setFocusPos({ x: clientX, y: clientY });
-      setIsFocusing(true);
-      setTimeout(() => setIsFocusing(false), 1000);
-
-      // Hardware Focus Logic
-      if (!stream) return;
-      const track = stream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities() as any;
-
-      if (capabilities.focusMode) {
-          try {
-              // 1. Switch to 'auto' (often triggers a one-shot macro focus scan) or 'manual' if supported
-              // 'auto' is generally the safest "refocus" request
-              await track.applyConstraints({
-                  advanced: [{ focusMode: 'auto' } as any]
-              });
-
-              // 2. Return to continuous after a short delay to maintain tracking
-              setTimeout(() => {
-                  track.applyConstraints({
-                      advanced: [{ focusMode: 'continuous' } as any]
-                  }).catch(() => {});
-              }, 1200);
-
-          } catch(err) {
-              console.debug("Focus adjustment failed", err);
-          }
-      }
   };
 
   // --- FILE UPLOAD ---
@@ -397,11 +350,8 @@ const ColorCanvas: React.FC<ColorCanvasProps> = ({ onColorSelected }) => {
       {/* 2. FULL SCREEN CAMERA OVERLAY */}
       {viewMode === 'camera' && (
           <div className="fixed inset-0 z-[100] bg-black">
-              {/* Tap to Focus Area */}
-              <div 
-                  className="absolute inset-0 z-0 cursor-crosshair"
-                  onClick={handleTapFocus}
-              >
+              {/* Camera Area */}
+              <div className="absolute inset-0 z-0">
                   {/* Video Feed */}
                   <video 
                       ref={videoRef} 
@@ -413,29 +363,6 @@ const ColorCanvas: React.FC<ColorCanvasProps> = ({ onColorSelected }) => {
                           if (videoRef.current) videoRef.current.play().catch(e => console.log(e));
                       }}
                   />
-                  
-                  {/* Focus Reticle Animation */}
-                  {isFocusing && (
-                      <div 
-                          className="absolute w-16 h-16 border-2 border-gold-400 rounded-full animate-ping pointer-events-none"
-                          style={{ 
-                              left: focusPos.x, 
-                              top: focusPos.y, 
-                              transform: 'translate(-50%, -50%)',
-                              boxShadow: '0 0 10px rgba(212, 175, 55, 0.5)'
-                          }} 
-                      />
-                  )}
-                  {isFocusing && (
-                      <div 
-                          className="absolute w-2 h-2 bg-gold-500 rounded-full pointer-events-none"
-                          style={{ 
-                              left: focusPos.x, 
-                              top: focusPos.y, 
-                              transform: 'translate(-50%, -50%)' 
-                          }} 
-                      />
-                  )}
               </div>
 
               {/* Controls Layer */}
@@ -466,10 +393,6 @@ const ColorCanvas: React.FC<ColorCanvasProps> = ({ onColorSelected }) => {
                   {/* Bottom Bar */}
                   <div className="bg-gradient-to-t from-black/80 to-transparent p-10 flex flex-col items-center justify-end gap-4 pointer-events-auto pb-20">
                       
-                      <div className="text-white/50 text-[10px] uppercase font-bold tracking-widest mb-2 animate-pulse">
-                          Tap screen to focus
-                      </div>
-
                       <button 
                         onClick={capturePhoto}
                         className="w-20 h-20 bg-white rounded-full border-4 border-gray-300 shadow-[0_0_30px_rgba(0,0,0,0.5)] active:scale-95 transition-transform flex items-center justify-center group"
