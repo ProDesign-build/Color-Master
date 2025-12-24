@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Beaker, Plus, Trash2, Save, AlertCircle, Percent, Hash, CheckCircle2 } from 'lucide-react';
 import { Formula, Pigment } from '../types';
-import { db, performSilentBackup } from '../db';
+import { db } from '../db'; // 👈 Clean import (Removed performSilentBackup)
 import { ConfirmDialog, DialogState } from './ConfirmDialog';
 
 interface MixingCalculatorProps {
@@ -114,6 +114,7 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
     );
   };
 
+  // 👇 FAST SAVE LOGIC (No Backup Lag)
   const performSave = async () => {
     if (!formulaName) return;
     setIsSaving(true);
@@ -129,10 +130,8 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
         };
         await db.formulas.add(formula);
 
-        // --- SYNC-TO-DISK STRATEGY ---
-        // We use performSilentBackup() instead of the old performAutoBackup()
-        // This handles permission checks internally.
-        await performSilentBackup();
+        // 👈 REMOVED: await performSilentBackup(); 
+        // The save is now purely local and instant.
 
         setFormulaName('');
         
