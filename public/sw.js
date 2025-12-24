@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colour-master-v3'; // Bumped version to v3
+const CACHE_NAME = 'colour-master-v4'; // Bumped version to v3
 
 // 1. URLs to cache immediately. 
 // NOTE: We removed .tsx files because they don't exist in the live app.
