@@ -60,8 +60,21 @@ export default function Library() {
       }
   };
 
-  const deleteSwatch = (id: number) => db.swatches.delete(id);
-  const deleteFormula = (id: number) => db.formulas.delete(id);
+  const checkAndRunAutoBackup = () => {
+    if (localStorage.getItem('cm_auto_backup') === 'true') {
+        performAutoBackup();
+    }
+  };
+
+  const deleteSwatch = async (id: number) => {
+      await db.swatches.delete(id);
+      checkAndRunAutoBackup();
+  };
+
+  const deleteFormula = async (id: number) => {
+      await db.formulas.delete(id);
+      checkAndRunAutoBackup();
+  };
 
   const startEditing = (id: number, currentName: string) => {
     setEditingId(id);
@@ -75,6 +88,7 @@ export default function Library() {
         await db.formulas.update(id, { name: editName });
     }
     setEditingId(null);
+    checkAndRunAutoBackup();
   };
 
   const toggleActive = (id: number) => {
@@ -125,6 +139,9 @@ export default function Library() {
 
               alert(`Successfully imported ${json.data.swatches.length} swatches and ${json.data.formulas.length} formulas.`);
               setShowDataModal(false);
+              
+              // Optionally backup after import to sync state
+              checkAndRunAutoBackup();
 
           } catch (err) {
               console.error(err);
@@ -136,7 +153,7 @@ export default function Library() {
       if (importInputRef.current) importInputRef.current.value = '';
   };
 
-  // Canvas Generation and Utils (Hidden for brevity, same as previous)
+  // Canvas Generation and Utils
   const generateSwatchCanvas = (swatchName: string, color: string): HTMLCanvasElement | null => {
     const canvas = document.createElement('canvas');
     canvas.width = 1200; canvas.height = 800;
@@ -308,8 +325,8 @@ export default function Library() {
                          <div className="flex flex-col gap-4">
                              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
                                  <div className="flex flex-col">
-                                     <span className="text-sm font-bold text-navy-900">Enable on Save</span>
-                                     <span className="text-[10px] text-gray-500">Automatically backup after changes.</span>
+                                     <span className="text-sm font-bold text-navy-900">Enable on Save/Edit</span>
+                                     <span className="text-[10px] text-gray-500">Auto-update backup on create, delete, or rename.</span>
                                  </div>
                                  <button onClick={toggleAutoBackup} className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${autoBackupEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
                                      <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-200 ${autoBackupEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
