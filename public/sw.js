@@ -7,6 +7,8 @@ const PRECACHE_URLS = [
   './', 
   './index.html',
   './manifest.json',
+  './assets/index.js',  // <--- The file we just fixed
+  './assets/index.css', // <--- The CSS file
   'https://cdn.tailwindcss.com',
   'https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png',
   'https://i.postimg.cc/jRL3h8sN/Texture-v1.jpg'
