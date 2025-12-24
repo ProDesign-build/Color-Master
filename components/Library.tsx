@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-// 👇 Updated Imports: Uses the new manual overwrite logic
-import { db, performManualOverwrite, resetDatabase } from '../db';
+// 👇 Updated Imports: Added triggerBackupDownload
+import { db, performManualOverwrite, resetDatabase, triggerBackupDownload } from '../db';
 import { Book, Trash2, Download, Droplet, Edit2, Check, Search, X, Palette, Share2, Database, FileUp, FileDown, AlertTriangle, Power, Save, RefreshCw } from 'lucide-react';
 import { colord } from 'colord';
 
@@ -35,7 +35,6 @@ export default function Library() {
     if (showDataModal) checkLink();
   }, [showDataModal]);
 
-  // 👇 FAST DELETE: No longer triggers auto-backup
   const deleteSwatch = async (id: number) => {
       await db.swatches.delete(id);
   };
@@ -49,7 +48,6 @@ export default function Library() {
     setEditName(currentName);
   };
 
-  // 👇 FAST RENAME: No longer triggers auto-backup
   const saveRename = async (id: number, type: 'swatch' | 'formula') => {
     if (type === 'swatch') {
         await db.swatches.update(id, { name: editName });
@@ -60,14 +58,13 @@ export default function Library() {
   };
 
   const toggleActive = (id: number) => {
-    if (editingId) return; // Don't toggle while renaming
+    if (editingId) return; 
     setActiveId(prev => prev === id ? null : id);
   };
 
-  // --- MANUAL BACKUP HANDLER ---
+  // --- 1. OVERWRITE LINKED FILE ---
   const handleManualBackup = async () => {
     setIsBackingUp(true);
-    // This function handles the logic: Overwrite if exists, Create if new
     const result = await performManualOverwrite();
     setIsBackingUp(false);
     
@@ -76,12 +73,15 @@ export default function Library() {
     } else if (result === 'created') {
         alert("Success! New backup file created and linked.");
         setHasLinkedFile(true);
-    } else if (result === 'fallback') {
-        // Mobile or Firefox usually hits this
+    } else if (result === 'fallback' || result === 'downloaded') {
         alert("Backup downloaded successfully.");
-    } else if (result === 'downloaded') {
-        alert("Backup downloaded.");
     }
+  };
+
+  // --- 2. EXPORT NEW JSON COPY (CLEAN DOWNLOAD) ---
+  const handleExportCopy = async () => {
+      const success = await triggerBackupDownload();
+      if (!success) alert("Failed to generate export.");
   };
 
   const handleResetDatabase = async () => {
@@ -103,35 +103,28 @@ export default function Library() {
               const text = event.target?.result as string;
               const json = JSON.parse(text);
 
-              // Basic validation
               if (!json.data || !Array.isArray(json.data.swatches) || !Array.isArray(json.data.formulas)) {
                   throw new Error("Invalid backup file format");
               }
 
-              // Perform import transaction
               await db.transaction('rw', db.swatches, db.formulas, async () => {
-                   // Strip IDs to allow auto-increment to handle new keys, effectively "merging" duplicates
                    const swatchesToImport = json.data.swatches.map(({id, ...rest}: any) => rest);
                    const formulasToImport = json.data.formulas.map(({id, ...rest}: any) => rest);
-
                    if(swatchesToImport.length > 0) await db.swatches.bulkAdd(swatchesToImport);
                    if(formulasToImport.length > 0) await db.formulas.bulkAdd(formulasToImport);
               });
 
-              alert(`Successfully imported ${json.data.swatches.length} swatches and ${json.data.formulas.length} formulas.`);
+              alert(`Successfully imported data.`);
               setShowDataModal(false);
-
           } catch (err) {
-              console.error(err);
-              alert("Error importing file. Please ensure it is a valid Colour Master backup JSON.");
+              alert("Error importing file. Invalid format.");
           }
       };
       reader.readAsText(file);
-      // Reset input
       if (importInputRef.current) importInputRef.current.value = '';
   };
 
-  // Canvas Generation and Utils
+  // Visual Canvas Generation (Unchanged)
   const generateSwatchCanvas = (swatchName: string, color: string): HTMLCanvasElement | null => {
     const canvas = document.createElement('canvas');
     canvas.width = 1200; canvas.height = 800;
@@ -168,21 +161,18 @@ export default function Library() {
       canvas.toBlob(async (blob) => {
           if (!blob) return;
           const file = new File([blob], `${swatchName}.png`, { type: 'image/png' });
-          const shareData = { title: `${swatchName} Swatch`, text: `Pigment formula for ${swatchName}`, files: [file] };
-          if (navigator.canShare && navigator.canShare(shareData)) { try { await navigator.share(shareData); } catch (err) {} } else { alert("Sharing not supported."); }
+          const shareData = { title: `${swatchName} Swatch`, files: [file] };
+          if (navigator.canShare && navigator.canShare(shareData)) { try { await navigator.share(shareData); } catch (err) {} }
       }, 'image/png', 1.0);
   };
 
-  // Filter Logic
   const filteredSwatches = swatches?.filter(s => s.name.toLowerCase().includes(swatchSearch.toLowerCase()) || s.hex.toLowerCase().includes(swatchSearch.toLowerCase())) || [];
   const filteredFormulas = formulas?.filter(f => f.name.toLowerCase().includes(formulaSearch.toLowerCase())) || [];
-
   const handleTabChange = (tab: 'swatches' | 'formulas') => { setActiveTab(tab); setActiveId(null); setEditingId(null); };
 
   return (
     <>
     <div className="h-full flex flex-col gap-4">
-      {/* Tab Navigation & Tools */}
       <div className="flex justify-between items-center">
         <div className="flex p-1 bg-cream-100/80 backdrop-blur-sm rounded-xl border border-cream-200">
             <button onClick={() => handleTabChange('swatches')} className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${activeTab === 'swatches' ? 'bg-navy-900 text-gold-500 shadow-md transform scale-[1.02]' : 'text-navy-800 hover:bg-cream-200/50'}`}>
@@ -192,7 +182,7 @@ export default function Library() {
                 <Droplet size={16} /><span className="hidden sm:inline">Formulas</span>
             </button>
         </div>
-        <button onClick={() => setShowDataModal(true)} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-navy-800 hover:text-gold-600 hover:border-gold-500 shadow-sm transition-all" title="Database Backup & Restore">
+        <button onClick={() => setShowDataModal(true)} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-navy-800 hover:text-gold-600 hover:border-gold-500 shadow-sm transition-all" title="Data Management">
             <Database size={18} /><span className="text-xs font-bold uppercase hidden md:inline">Data</span>
         </button>
       </div>
@@ -206,20 +196,19 @@ export default function Library() {
                     </div>
                     <div className="relative group max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-gold-500 transition-colors" size={16} />
-                        <input type="text" placeholder="Search by name or hex..." value={swatchSearch} onChange={(e) => setSwatchSearch(e.target.value)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-navy-900 focus:ring-1 focus:ring-navy-900/10 outline-none transition-all placeholder:text-gray-400"/>
+                        <input type="text" placeholder="Search..." value={swatchSearch} onChange={(e) => setSwatchSearch(e.target.value)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-navy-900 outline-none transition-all placeholder:text-gray-400"/>
                         {swatchSearch && (<button onClick={() => setSwatchSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-400"><X size={14} /></button>)}
                     </div>
                 </div>
                 <div className="flex-grow overflow-y-auto p-4 pb-32 lg:pb-4 custom-scrollbar">
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                        {filteredSwatches.length === 0 && (<div className="col-span-full text-center py-20"><div className="inline-flex justify-center items-center w-16 h-16 rounded-full bg-cream-100 mb-4"><Book className="text-gray-300" size={32} /></div><p className="text-gray-400 text-sm font-medium uppercase tracking-wider">{swatchSearch ? 'No matching swatches found' : 'Your swatch library is empty'}</p></div>)}
                         {filteredSwatches.map(swatch => (
                             <div key={swatch.id} onClick={() => toggleActive(swatch.id!)} className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-300 group cursor-pointer ${activeId === swatch.id ? 'border-gold-500 bg-gold-50/10 shadow-md scale-[1.01]' : 'border-gray-100 bg-white hover:border-gold-500/30'}`}>
                                 <div className="flex items-center gap-3 flex-grow min-w-0">
-                                    <div className="flex-shrink-0 w-12 h-12 rounded-full border-4 border-white shadow-md ring-1 ring-gray-100 transition-transform group-hover:scale-105" style={{ backgroundColor: swatch.hex }} />
-                                    {editingId === swatch.id ? (<div className="flex items-center gap-1 flex-grow" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(swatch.id!, 'swatch')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="min-w-0 flex-grow"><div className="font-bold text-navy-900 text-sm flex items-center gap-2 truncate">{swatch.name}<button onClick={(e) => { e.stopPropagation(); startEditing(swatch.id!, swatch.name); }} className={`transition-all duration-200 ${activeId === swatch.id ? 'opacity-100 pointer-events-auto text-navy-900' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'}`}><Edit2 size={12}/></button></div><div className="text-[10px] text-gray-500 font-mono uppercase bg-gray-50 inline-block px-1.5 rounded mt-0.5 border border-gray-100">{swatch.hex}</div></div>)}
+                                    <div className="flex-shrink-0 w-12 h-12 rounded-full border-4 border-white shadow-md ring-1 ring-gray-100" style={{ backgroundColor: swatch.hex }} />
+                                    {editingId === swatch.id ? (<div className="flex items-center gap-1 flex-grow" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(swatch.id!, 'swatch')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="min-w-0 flex-grow"><div className="font-bold text-navy-900 text-sm flex items-center gap-2 truncate">{swatch.name}<button onClick={(e) => { e.stopPropagation(); startEditing(swatch.id!, swatch.name); }} className={`transition-all ${activeId === swatch.id ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'} text-gray-400`}><Edit2 size={12}/></button></div><div className="text-[10px] text-gray-500 font-mono uppercase">{swatch.hex}</div></div>)}
                                 </div>
-                                <div className={`flex gap-1 pl-2 transition-all duration-300 ${activeId === swatch.id ? 'opacity-100 translate-x-0 pointer-events-auto' : 'opacity-0 translate-x-4 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto'}`}><button onClick={(e) => { e.stopPropagation(); handleShareSwatch(swatch.name, swatch.hex); }} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors"><Share2 size={16}/></button><button onClick={(e) => { e.stopPropagation(); handleDownloadSwatch(swatch.name, swatch.hex); }} className="text-navy-800 hover:text-gold-600 p-2 hover:bg-cream-50 rounded-lg transition-colors"><Download size={16}/></button><button onClick={(e) => { e.stopPropagation(); deleteSwatch(swatch.id!); }} className="text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button></div>
+                                <div className={`flex gap-1 pl-2 transition-all ${activeId === swatch.id ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'}`}><button onClick={(e) => { e.stopPropagation(); handleShareSwatch(swatch.name, swatch.hex); }} className="text-navy-800 p-2 hover:bg-cream-50 rounded-lg"><Share2 size={16}/></button><button onClick={(e) => { e.stopPropagation(); handleDownloadSwatch(swatch.name, swatch.hex); }} className="text-navy-800 p-2 hover:bg-cream-50 rounded-lg"><Download size={16}/></button><button onClick={(e) => { e.stopPropagation(); deleteSwatch(swatch.id!); }} className="text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16}/></button></div>
                             </div>
                         ))}
                     </div>
@@ -227,30 +216,28 @@ export default function Library() {
             </div>
         )}
         {activeTab === 'formulas' && (
-            <div className="absolute inset-0 bg-white rounded-xl shadow-sm border border-cream-100 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="absolute inset-0 bg-white rounded-xl shadow-sm border border-cream-100 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="p-4 border-b border-gray-100 bg-cream-50/50">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2 text-navy-900 font-serif font-bold"><h3 className="text-lg">Formulas</h3><span className="text-[10px] bg-navy-100 text-navy-800 px-2 py-0.5 rounded-full border border-navy-200">{filteredFormulas.length}</span></div>
                     </div>
                     <div className="relative group max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-navy-900 transition-colors" size={16} />
-                        <input type="text" placeholder="Search formulas..." value={formulaSearch} onChange={(e) => setFormulaSearch(e.target.value)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-navy-900 focus:ring-1 focus:ring-navy-900/10 outline-none transition-all placeholder:text-gray-400" />
-                         {formulaSearch && (<button onClick={() => setFormulaSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-400"><X size={14} /></button>)}
+                        <input type="text" placeholder="Search..." value={formulaSearch} onChange={(e) => setFormulaSearch(e.target.value)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-navy-900 outline-none transition-all placeholder:text-gray-400" />
                     </div>
                 </div>
                 <div className="flex-grow overflow-y-auto p-4 pb-32 lg:pb-4 custom-scrollbar">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredFormulas.length === 0 && (<div className="col-span-full text-center py-20"><div className="inline-flex justify-center items-center w-16 h-16 rounded-full bg-cream-100 mb-4"><Droplet className="text-gray-300" size={32} /></div><p className="text-gray-400 text-sm font-medium uppercase tracking-wider">{formulaSearch ? 'No matching formulas found' : 'No saved formulas yet'}</p></div>)}
                         {filteredFormulas.map(formula => (
-                            <div key={formula.id} onClick={() => toggleActive(formula.id!)} className={`p-5 rounded-xl border transition-all duration-300 flex flex-col h-full cursor-pointer ${activeId === formula.id ? 'border-navy-500 bg-navy-50/10 shadow-md' : 'border-gray-100 bg-white hover:border-navy-200'}`}>
+                            <div key={formula.id} onClick={() => toggleActive(formula.id!)} className={`p-5 rounded-xl border transition-all cursor-pointer ${activeId === formula.id ? 'border-navy-500 bg-navy-50/10' : 'border-gray-100 bg-white'}`}>
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="flex-grow min-w-0 pr-2">
-                                        {editingId === formula.id ? (<div className="flex items-center gap-1 mb-1" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(formula.id!, 'formula')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="font-bold text-navy-900 flex items-center gap-2 text-base truncate"><div className="bg-navy-50 p-1.5 rounded-md"><Droplet size={16} className="text-gold-500 flex-shrink-0" /></div><span className="truncate" title={formula.name}>{formula.name}</span><button onClick={(e) => { e.stopPropagation(); startEditing(formula.id!, formula.name); }} className={`transition-all duration-200 ${activeId === formula.id ? 'opacity-100 pointer-events-auto text-navy-900' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-400 hover:text-navy-900'}`}><Edit2 size={12}/></button></div>)}
-                                        <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-wider font-medium flex gap-2"><span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 border border-gray-200">Batch: {formula.batchSize}{formula.unit}</span><span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 border border-gray-200">{formula.ratioMode === 'percentage' ? 'Percents' : 'Parts'}</span></div>
+                                        {editingId === formula.id ? (<div className="flex items-center gap-1 mb-1" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(formula.id!, 'formula')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="font-bold text-navy-900 flex items-center gap-2 text-base truncate"><div className="bg-navy-50 p-1.5 rounded-md"><Droplet size={16} className="text-gold-500 flex-shrink-0" /></div><span className="truncate">{formula.name}</span><button onClick={(e) => { e.stopPropagation(); startEditing(formula.id!, formula.name); }} className={`transition-all ${activeId === formula.id ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'} text-gray-400`}><Edit2 size={12}/></button></div>)}
+                                        <div className="text-[10px] text-gray-400 mt-2 uppercase flex gap-2"><span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 border border-gray-200">Batch: {formula.batchSize}{formula.unit}</span></div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); deleteFormula(formula.id!); }} className={`p-2 rounded-lg transition-all ${activeId === formula.id ? 'opacity-100 pointer-events-auto text-gray-400 hover:text-red-500 hover:bg-red-50' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto text-gray-300 hover:text-red-500'}`}><Trash2 size={18}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); deleteFormula(formula.id!); }} className={`p-2 rounded-lg transition-all ${activeId === formula.id ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'} text-gray-300 hover:text-red-500`}><Trash2 size={18}/></button>
                                 </div>
-                                <div className="space-y-2 border-t border-gray-50 pt-3 mt-auto"><div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Pigment Breakdown</div>{formula.pigments.map(p => (<div key={p.id} className="flex justify-between text-xs items-center group/item hover:bg-cream-50/50 p-1 rounded -mx-1 transition-colors"><span className="text-gray-700 truncate pr-2 font-medium">{p.name || 'Unnamed Pigment'}</span><span className="font-mono text-navy-900 font-bold bg-cream-100 px-1.5 py-0.5 rounded min-w-[3rem] text-center border border-cream-200">{formula.ratioMode === 'percentage' ? `${((p.ratio/100)*formula.batchSize).toFixed(1)}` : `${(p.ratio * (formula.batchSize / formula.pigments.reduce((s,x)=>s+(x.ratio || 0),0))).toFixed(1)}`}<span className="text-[9px] text-gray-500 ml-0.5 font-normal">ml</span></span></div>))}</div>
+                                <div className="space-y-2 border-t border-gray-50 pt-3 mt-auto">{formula.pigments.map(p => (<div key={p.id} className="flex justify-between text-xs items-center group/item hover:bg-cream-50/50 p-1 rounded -mx-1 transition-colors"><span className="text-gray-700 truncate pr-2 font-medium">{p.name || 'Unnamed Pigment'}</span><span className="font-mono text-navy-900 font-bold bg-cream-100 px-1.5 py-0.5 rounded border border-cream-200">{formula.ratioMode === 'percentage' ? `${((p.ratio/100)*formula.batchSize).toFixed(1)}` : `${(p.ratio * (formula.batchSize / formula.pigments.reduce((s,x)=>s+(x.ratio || 0),0))).toFixed(1)}`}<span className="text-[9px] text-gray-500 ml-0.5 font-normal">ml</span></span></div>))}</div>
                             </div>
                         ))}
                     </div>
@@ -273,11 +260,11 @@ export default function Library() {
                 </div>
                 
                 <div className="p-6 space-y-6">
-                    {/* SECTION 1: Backup & Restore */}
                     <div>
                         <h4 className="text-xs font-bold uppercase text-navy-900 mb-3 tracking-wider">Backup & Restore</h4>
                         <div className="grid grid-cols-2 gap-4">
-                            {/* Primary Action: Update/Create Linked File */}
+                            
+                            {/* ACTION: OVERWRITE LINKED FILE */}
                             <button 
                                 onClick={handleManualBackup}
                                 disabled={isBackingUp}
@@ -287,12 +274,18 @@ export default function Library() {
                                     {isBackingUp ? <RefreshCw className="animate-spin" size={24} /> : (hasLinkedFile ? <Save size={24} /> : <FileDown size={24} />)}
                                 </div>
                                 <span className={`text-xs font-bold uppercase ${hasLinkedFile ? 'text-green-800' : 'text-navy-900'}`}>
-                                    {isBackingUp ? 'Saving...' : (hasLinkedFile ? 'Update Backup File' : 'Save to Disk')}
+                                    {hasLinkedFile ? 'Update Backup File' : 'Save to Disk'}
                                 </span>
-                                {hasLinkedFile && <span className="text-[10px] text-green-600 -mt-2">Overwrites linked file</span>}
+                                {hasLinkedFile && <span className="text-[10px] text-green-600 -mt-2 text-center">Overwrites linked file</span>}
                             </button>
 
-                            {/* Secondary Actions */}
+                            {/* ACTION: EXPORT FRESH COPY (DOWNLOAD) */}
+                            <button onClick={handleExportCopy} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-navy-500 hover:bg-navy-50 transition-all group">
+                                <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform"><FileDown className="text-navy-700" size={24} /></div>
+                                <span className="text-xs font-bold uppercase text-navy-700">Export Copy</span>
+                            </button>
+
+                            {/* ACTION: RESTORE (UPLOAD) */}
                             <button onClick={() => importInputRef.current?.click()} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-gold-500 hover:bg-gold-50 transition-all group">
                                 <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform"><FileUp className="text-gold-600" size={24} /></div>
                                 <span className="text-xs font-bold uppercase text-navy-900">Restore</span>
@@ -308,7 +301,6 @@ export default function Library() {
 
                     <hr className="border-gray-100" />
 
-                    {/* SECTION 2: Danger Zone */}
                     <div>
                          <h4 className="text-xs font-bold uppercase text-red-600 mb-3 tracking-wider">Danger Zone</h4>
                          <button onClick={handleResetDatabase} className="w-full flex items-center justify-center gap-2 p-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-bold text-sm">
