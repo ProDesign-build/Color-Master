@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Palette, Camera, Beaker, Book } from 'lucide-react';
 import ColorCanvas from './components/ColorCanvas';
 import LeatherPreview from './components/LeatherPreview';
@@ -7,7 +7,7 @@ import Library from './components/Library';
 import ColorWheel from './components/ColorWheel';
 import { ConfirmDialog, DialogState } from './components/ConfirmDialog';
 import { ViewState } from './types';
-import { db } from './db';
+import { db, performAutoBackup } from './db';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ViewState>('preview');
@@ -24,6 +24,20 @@ const App: React.FC = () => {
     message: ''
   });
 
+  // --- PERSISTENCE CHECK ---
+  useEffect(() => {
+    const initPersistence = async () => {
+      if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (!isPersisted) {
+          const result = await navigator.storage.persist();
+          console.log(`Storage persistence enabled: ${result}`);
+        }
+      }
+    };
+    initPersistence();
+  }, []);
+
   const handleColorSelected = (hex: string) => {
     setCurrentColor(hex);
   };
@@ -39,6 +53,13 @@ const App: React.FC = () => {
             hex: currentColor.toLowerCase(),
             createdAt: Date.now()
         });
+        
+        // --- AUTO BACKUP CHECK ---
+        const isAutoBackup = localStorage.getItem('cm_auto_backup') === 'true';
+        if (isAutoBackup) {
+            performAutoBackup();
+        }
+
         setSaveName('');
         setShowSaveDialog(false);
         closeDialog(); // Close any open confirmation dialogs
