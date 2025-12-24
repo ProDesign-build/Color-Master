@@ -1,36 +1,40 @@
-const CACHE_NAME = 'colour-master-v4'; // Bumped version to v3
+/**
+ * Colour Master - Service Worker
+ * Version: v12 (Dynamic Strategy)
+ */
 
-// 1. URLs to cache immediately. 
-// NOTE: We removed .tsx files because they don't exist in the live app.
-// We only cache the "Skeleton" of the app here.
+const CACHE_NAME = 'colour-master-v12'; 
+
+// Core files that must be available to boot the app
 const PRECACHE_URLS = [
-  './', 
+  './',
   './index.html',
   './manifest.json',
-  './assets/index.js',  // <--- The file we just fixed
-  './assets/index.css', // <--- The CSS file
-  'https://cdn.tailwindcss.com',
+  './icon-192.png',
+  './icon-512.png',
   'https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png',
   'https://i.postimg.cc/jRL3h8sN/Texture-v1.jpg'
 ];
 
-// Install Event: Cache core files
+// Install Event: Pre-cache the "Skeleton"
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      console.log('[SW] Pre-caching core assets');
       return cache.addAll(PRECACHE_URLS);
     })
   );
   self.skipWaiting();
 });
 
-// Activate Event: Clean up old caches
+// Activate Event: Clean up old versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -39,42 +43,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: The "Brain" of the PWA
+// Fetch Event: Handling Offline & Dynamic Caching
 self.addEventListener('fetch', (event) => {
-  
-  // A. Handle Navigation Requests (HTML pages)
-  // If user navigates to /home or /mixing while offline, serve index.html
+  // Skip non-GET requests (like database syncs or analytics)
+  if (event.request.method !== 'GET') return;
+
+  // --- STRATEGY 1: Navigation (HTML) ---
+  // Always try network first so user sees updates, fallback to index.html if offline
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          return caches.match('./index.html');
-        })
+      fetch(event.request).catch(() => {
+        return caches.match('./index.html') || caches.match('./');
+      })
     );
     return;
   }
 
-  // B. Handle Assets (JS, CSS, Images) - Stale-While-Revalidate
-  // 1. Try to fetch from network & update cache
-  // 2. If network fails, fall back to cache
-  if (event.request.method === 'GET') {
-    event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((cachedResponse) => {
-          const fetchPromise = fetch(event.request).then((networkResponse) => {
-            // Cache valid responses
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {
-            // Network failed, do nothing (we will return cachedResponse)
-          });
+  // --- STRATEGY 2: Assets (JS, CSS, Images) ---
+  // Cache-First, then Network (with dynamic caching for Vite hashed files)
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
 
-          // Return cached response if we have it, otherwise wait for network
-          return cachedResponse || fetchPromise;
+      return fetch(event.request).then((networkResponse) => {
+        // Don't cache invalid responses or cross-origin errors
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+
+        // Dynamic Caching: Save Vite's new assets automatically as they load
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
         });
-      })
-    );
-  }
+
+        return networkResponse;
+      }).catch(() => {
+        // Final fallback if both fail
+        return new Response('Offline content not available', { status: 503 });
+      });
+    })
+  );
 });
