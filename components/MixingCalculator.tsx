@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Beaker, Plus, Trash2, Save, AlertCircle, Percent, Hash, CheckCircle2 } from 'lucide-react';
 import { Formula, Pigment } from '../types';
-import { db } from '../db'; // 👈 Clean import (Removed performSilentBackup)
+// 👇 Updated Import: Uses performManualOverwrite to match new db.ts
+import { db, performManualOverwrite } from '../db'; 
 import { ConfirmDialog, DialogState } from './ConfirmDialog';
 
 interface MixingCalculatorProps {
@@ -12,9 +13,12 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
   const [batchSize, setBatchSize] = useState<number>(100);
   const [customInput, setCustomInput] = useState<string>('100');
   const [ratioMode, setRatioMode] = useState<'percentage' | 'parts'>('percentage');
+  
+  // Initialize with UUID to prevent mixing ID types in the database
   const [pigments, setPigments] = useState<Pigment[]>([
-    { id: '1', name: 'Base White', ratio: 0 },
+    { id: crypto.randomUUID(), name: 'Base White', ratio: 0 },
   ]);
+  
   const [formulaName, setFormulaName] = useState(initialColorName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -38,7 +42,6 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
 
   const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    // Prevent negative sign from being typed
     if (val.includes('-')) return;
 
     setCustomInput(val);
@@ -66,10 +69,8 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
   const updatePigment = (id: string, field: keyof Pigment, value: string | number) => {
     let finalValue = value;
     
-    // Prevent negative values for ratios
     if (field === 'ratio' && typeof value === 'number') {
         if (value < 0) finalValue = 0;
-        // Limit to 100 if in percentage mode
         if (ratioMode === 'percentage' && value > 100) finalValue = 100;
     }
 
@@ -90,64 +91,61 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
   };
 
   const isSameFormula = (f: Formula, currentPigments: Pigment[], currentMode: string, currentBatchSize: number) => {
-    // 1. Exact Batch Size Check
     if (Math.abs(f.batchSize - currentBatchSize) > 0.001) return false;
-
-    // 2. Exact Ratio Mode Check
     if (f.ratioMode !== currentMode) return false;
 
-    // 3. Prepare Pigments
-    // Filter out pigments with 0 ratio or empty names to compare actual recipe content
     const cleanCurrent = currentPigments.filter(p => p.ratio > 0 && p.name.trim() !== '');
     const cleanStored = f.pigments.filter(p => p.ratio > 0 && p.name.trim() !== '');
 
     if (cleanStored.length !== cleanCurrent.length) return false;
 
-    // Sort case-sensitive to ensure order doesn't matter, but casing does
     const sortedStored = [...cleanStored].sort((a,b) => a.name.localeCompare(b.name));
     const sortedCurrent = [...cleanCurrent].sort((a,b) => a.name.localeCompare(b.name));
 
-    // 4. Compare Content
     return sortedStored.every((p, i) => 
-        p.name.trim() === sortedCurrent[i].name.trim() && // Exact string match (case sensitive)
-        Math.abs(p.ratio - sortedCurrent[i].ratio) < 0.001 // Exact ratio match
+        p.name.trim() === sortedCurrent[i].name.trim() && 
+        Math.abs(p.ratio - sortedCurrent[i].ratio) < 0.001
     );
   };
 
-  // 👇 FAST SAVE LOGIC (No Backup Lag)
+  // 👇 STABLE SAVE LOGIC
   const performSave = async () => {
     if (!formulaName) return;
     setIsSaving(true);
     setSaveSuccess(false);
     try {
-        const formula: Formula = {
+        // Prepare data: Excluding 'id' so Dexie ++id handles auto-increment
+        const formulaData = {
             name: formulaName.trim(),
             batchSize,
             unit: 'ml',
             ratioMode,
-            pigments, // Save all, even 0s if user wants draft
+            pigments, 
             createdAt: Date.now()
         };
-        await db.formulas.add(formula);
 
-        // 👈 REMOVED: await performSilentBackup(); 
-        // The save is now purely local and instant.
+        await db.formulas.add(formulaData as any);
+
+        // --- UPDATED AUTO BACKUP ---
+        const isAutoBackup = localStorage.getItem('cm_auto_backup') === 'true';
+        if (isAutoBackup) {
+            // This triggers the overwrite of your linked backup file
+            await performManualOverwrite();
+        }
 
         setFormulaName('');
-        
-        // Close dialog if open (from confirmation)
         closeDialog();
 
         // Success Feedback
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
-        console.error(e);
+        console.error("Formula Save Failed:", e);
         setDialog({
             isOpen: true,
             type: 'alert',
             title: 'Save Error',
-            message: 'Failed to save formula to local storage.'
+            message: 'Failed to save formula to library.'
         });
     } finally {
         setIsSaving(false);
@@ -156,23 +154,20 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
 
   const initiateSave = async () => {
       if (!formulaName || !isValid) return;
-
       const nameToCheck = formulaName.trim();
       
       try {
-           // 1. Check for duplicate Name (Case insensitive for names to avoid confusion)
            const duplicateName = await db.formulas.where('name').equalsIgnoreCase(nameToCheck).first();
            if (duplicateName) {
                 setDialog({
                     isOpen: true,
                     type: 'alert',
                     title: 'Name Taken',
-                    message: `A formula named "${duplicateName.name}" already exists. Please choose a unique name to avoid confusion in your library.`
+                    message: `A formula named "${duplicateName.name}" already exists.`
                 });
                 return;
            }
 
-           // 2. Check for duplicate Content (Strict: Batch, Mode, Case-Sensitive Pigments, Ratios)
            const allFormulas = await db.formulas.toArray();
            const duplicateFormula = allFormulas.find(f => isSameFormula(f, pigments, ratioMode, batchSize));
 
@@ -181,24 +176,22 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                     isOpen: true,
                     type: 'confirm',
                     title: 'Duplicate Formula',
-                    message: `This exact formula mix (including batch size and pigment names) is already cataloged as "${duplicateFormula.name}".\n\nDo you want to save it again under the new name "${nameToCheck}"?`,
+                    message: `This exact mix is already cataloged as "${duplicateFormula.name}". Save it again?`,
                     onConfirm: performSave
                 });
                 return;
            }
 
-           // 3. Proceed
            await performSave();
-
       } catch (e) {
-          console.error("Error validating formula:", e);
+          console.error("Validation error:", e);
       }
   };
 
   return (
     <>
         <div className="bg-white rounded-lg shadow-sm border border-cream-100 flex flex-col lg:h-full lg:overflow-hidden min-h-0 relative">
-        <div className="flex-grow lg:overflow-y-auto p-6 pb-32 lg:pb-6">
+        <div className="flex-grow lg:overflow-y-auto p-6 pb-32 lg:pb-6 custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-serif text-navy-900 font-bold flex items-center gap-2">
                     <Beaker className="text-gold-500" /> Mixing Lab
@@ -220,7 +213,6 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                 </div>
             </div>
 
-            {/* Name Input & Save Button */}
             <div className="mb-8">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Formula Name</label>
                 <div className="flex items-center gap-3">
@@ -241,7 +233,6 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 : 'bg-navy-900 text-gold-400 hover:bg-navy-800 hover:shadow-xl shadow-navy-900/20'
                         }`}
-                        title="Save Formula"
                     >
                         {saveSuccess ? <CheckCircle2 size={24}/> : <Save size={24} />} 
                     </button>
@@ -270,10 +261,9 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                             step="any"
                             value={customInput}
                             onChange={handleCustomChange}
-                            className={`w-full sm:w-24 pl-3 pr-8 py-2 rounded-md text-sm font-medium outline-none border transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
-                                ${!PRESETS.includes(batchSize) 
+                            className={`w-full sm:w-24 pl-3 pr-8 py-2 rounded-md text-sm font-medium outline-none border transition-all ${!PRESETS.includes(batchSize) 
                                     ? 'border-gold-500 ring-1 ring-gold-500 text-navy-900 bg-white shadow-sm' 
-                                    : 'border-gray-200 bg-cream-50 text-gray-500 focus:border-navy-900 focus:text-navy-900 focus:bg-white'
+                                    : 'border-gray-200 bg-cream-50 text-gray-500 focus:border-navy-900'
                                 }`}
                             placeholder="Custom"
                         />
@@ -305,10 +295,9 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                             <input 
                                 type="number" 
                                 min="0"
-                                max={ratioMode === 'percentage' ? 100 : undefined}
                                 value={p.ratio || ''}
                                 onChange={(e) => updatePigment(p.id, 'ratio', parseFloat(e.target.value))}
-                                className="w-full text-right bg-cream-50 border border-transparent focus:border-gold-500 rounded px-2 py-2 text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-full text-right bg-cream-50 border border-transparent focus:border-gold-500 rounded px-2 py-2 text-sm font-mono"
                             />
                         </div>
                         <div className="col-span-3 text-right font-mono text-sm font-bold text-navy-900">
@@ -320,32 +309,21 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
                     </div>
                 ))}
                 
-                {/* Total / Validation Inline Row */}
                 <div className="grid grid-cols-12 gap-2 items-center px-1 py-3 border-t border-gray-100 bg-cream-50/50 rounded-lg">
-                    <div className="col-span-6 text-right text-[10px] font-bold uppercase text-gray-400 tracking-widest">
-                        Total
-                    </div>
+                    <div className="col-span-6 text-right text-[10px] font-bold uppercase text-gray-400 tracking-widest">Total</div>
                     <div className={`col-span-2 text-right text-sm font-mono font-bold ${
                         ratioMode === 'percentage' 
-                            ? (isValid ? 'text-green-600' : (remainingPercentage > 0 ? 'text-gold-600' : 'text-red-500')) 
+                            ? (isValid ? 'text-green-600' : 'text-red-500') 
                             : 'text-navy-900'
                     }`}>
                         {totalUnits}{ratioMode === 'percentage' ? '%' : ''}
                     </div>
                     <div className="col-span-4 pl-2">
-                        {ratioMode === 'percentage' && (
-                            <>
-                                {isValid ? (
-                                    <span className="text-[10px] text-green-600 font-bold flex items-center gap-1">
-                                    <CheckCircle2 size={12} /> Perfect
-                                    </span>
-                                ) : (
-                                    <span className={`text-[10px] font-bold flex items-center gap-1 ${remainingPercentage > 0 ? 'text-gold-600' : 'text-red-500'}`}>
-                                    <AlertCircle size={12} />
-                                    {remainingPercentage > 0 ? `Add ${remainingPercentage}%` : `Remove ${Math.abs(remainingPercentage)}%`}
-                                    </span>
-                                )}
-                            </>
+                        {ratioMode === 'percentage' && !isValid && (
+                             <span className={`text-[10px] font-bold flex items-center gap-1 ${remainingPercentage > 0 ? 'text-gold-600' : 'text-red-500'}`}>
+                                <AlertCircle size={12} />
+                                {remainingPercentage > 0 ? `Add ${remainingPercentage}%` : `Remove ${Math.abs(remainingPercentage)}%`}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -360,7 +338,6 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
         </div>
         </div>
         
-        {/* Reusable Confirmation Dialog */}
         <ConfirmDialog dialog={dialog} onClose={closeDialog} />
     </>
   );
