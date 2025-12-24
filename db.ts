@@ -29,6 +29,9 @@ export const db = new LeatherDB();
 
 // --- SHARED UTILITIES ---
 
+/**
+ * Creates the JSON backup string from current DB data.
+ */
 const createBackupJSON = async () => {
     const s = await db.swatches.toArray();
     const f = await db.formulas.toArray();
@@ -40,7 +43,9 @@ const createBackupJSON = async () => {
     }, null, 2);
 };
 
-// Fallback for browsers that don't support overwriting (Mobile/Firefox)
+/**
+ * Standard browser download fallback.
+ */
 const downloadBackupBlob = (jsonStr: string) => {
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -54,6 +59,9 @@ const downloadBackupBlob = (jsonStr: string) => {
     URL.revokeObjectURL(url);
 };
 
+/**
+ * Wipes the database completely.
+ */
 export const resetDatabase = async () => {
   return db.transaction('rw', db.swatches, db.formulas, db.meta, async () => {
       await db.swatches.clear();
@@ -62,23 +70,29 @@ export const resetDatabase = async () => {
   });
 };
 
+/**
+ * Action: Export Copy
+ * Manually trigger a fresh JSON download.
+ */
 export const triggerBackupDownload = async () => {
     try {
         const json = await createBackupJSON();
         downloadBackupBlob(json);
         return true;
-    } catch(e) { return false; }
+    } catch(e) { 
+        console.error("Export Copy failed", e);
+        return false; 
+    }
 };
 
-// --- MANUAL FILE SYNC (File System Access API) ---
+// --- MANUAL FILE SYNC LOGIC ---
 
 /**
- * 1. Setup/Link a File
- * Call this to pick a file location.
+ * Pick and link a specific file on the user's disk.
  */
 export const linkBackupFile = async () => {
     if (!('showSaveFilePicker' in window)) {
-        throw new Error("Your browser does not support file linking. Please use standard download.");
+        throw new Error("Your browser does not support file linking. Please use Export Copy.");
     }
     
     const opts = {
@@ -93,20 +107,20 @@ export const linkBackupFile = async () => {
 };
 
 /**
- * 2. Perform Manual Overwrite
- * Called when user clicks "Update Backup" in Library.
+ * Action: Update Backup File
+ * Overwrites the linked file or prompts to create one.
  */
 export const performManualOverwrite = async () => {
     try {
         const jsonStr = await createBackupJSON();
 
-        // A. Check for existing handle
+        // 1. Check for existing handle
         const record = await db.meta.get('backupHandle');
         
         if (record && record.handle) {
             const handle = record.handle as FileSystemFileHandle;
             
-            // Check/Request Permission (User action allows this prompt)
+            // Verify permission (triggers prompt if necessary)
             // @ts-ignore
             const perm = await handle.queryPermission({ mode: 'readwrite' });
             if (perm !== 'granted') {
@@ -119,11 +133,11 @@ export const performManualOverwrite = async () => {
             const writable = await handle.createWritable();
             await writable.write(jsonStr);
             await writable.close();
-            console.log("File overwritten successfully");
+            console.log("✔ Backup file updated");
             return "overwritten";
         }
 
-        // B. No handle found? Try to create one.
+        // 2. No handle found? Setup a new one
         if ('showSaveFilePicker' in window) {
             const newHandle = await linkBackupFile();
             // @ts-ignore
@@ -133,13 +147,13 @@ export const performManualOverwrite = async () => {
             return "created";
         }
 
-        // C. Fallback to download (Mobile/Safari)
+        // 3. Absolute Fallback (Standard Download)
         downloadBackupBlob(jsonStr);
         return "downloaded";
 
     } catch (e: any) {
-        console.error("Backup failed", e);
-        // If file access failed, fallback to download so user doesn't lose data
+        console.error("Manual Backup failed", e);
+        // Fallback to download so user doesn't lose current state if disk write fails
         const jsonStr = await createBackupJSON();
         downloadBackupBlob(jsonStr);
         return "fallback";
