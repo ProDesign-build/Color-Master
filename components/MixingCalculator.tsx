@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Beaker, Plus, Trash2, Save, AlertCircle, Percent, Hash, CheckCircle2 } from 'lucide-react';
 import { Formula, Pigment } from '../types';
-import { db } from '../db';
+import { db, performAutoBackup } from '../db';
 import { ConfirmDialog, DialogState } from './ConfirmDialog';
 
 interface MixingCalculatorProps {
@@ -128,6 +128,13 @@ const MixingCalculator: React.FC<MixingCalculatorProps> = ({ initialColorName })
             createdAt: Date.now()
         };
         await db.formulas.add(formula);
+
+        // --- AUTO BACKUP CHECK ---
+        const isAutoBackup = localStorage.getItem('cm_auto_backup') === 'true';
+        if (isAutoBackup) {
+            performAutoBackup();
+        }
+
         setFormulaName('');
         
         // Close dialog if open (from confirmation)
