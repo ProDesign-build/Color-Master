@@ -72,7 +72,9 @@ export default function Library() {
       if (!blob) return;
       const file = new File([blob], `${swatchName}.png`, { type: 'image/png' });
       const shareData = { title: `${swatchName} Swatch`, text: `Pigment formula for ${swatchName}`, files: [file] };
-      if (navigator.canShare && navigator.canShare(shareData)) { try { await navigator.share(shareData); } catch (err) {} } else { alert("Sharing not supported on this device."); }
+      if (navigator.canShare && navigator.canShare(shareData)) { 
+        try { await navigator.share(shareData); } catch (err) {} 
+      } else { alert("Sharing not supported on this device."); }
     }, 'image/png', 1.0);
   };
 
@@ -99,9 +101,18 @@ export default function Library() {
     setIsBackingUp(true);
     const result = await performManualOverwrite();
     setIsBackingUp(false);
-    if (result === 'overwritten') alert("Success! Your linked backup file has been updated.");
-    else if (result === 'created') { alert("Success! New backup file created and linked."); setHasLinkedFile(true); }
-    else if (result === 'denied') alert("Permission denied. Could not update the file.");
+    
+    if (result === 'overwritten') {
+        alert("Success! Your linked backup file has been updated.");
+    } else if (result === 'file-missing') {
+        alert("The linked backup file was moved or deleted. Please select a new location.");
+        setHasLinkedFile(false);
+    } else if (result === 'created') {
+        alert("Success! New backup file created and linked.");
+        setHasLinkedFile(true);
+    } else if (result === 'denied') {
+        alert("Permission denied. Could not update the file.");
+    }
   };
 
   const handleExportCopy = async () => {
@@ -143,7 +154,6 @@ export default function Library() {
 
   const filteredSwatches = swatches?.filter(s => s.name.toLowerCase().includes(swatchSearch.toLowerCase()) || s.hex.toLowerCase().includes(swatchSearch.toLowerCase())) || [];
   const filteredFormulas = formulas?.filter(f => f.name.toLowerCase().includes(formulaSearch.toLowerCase())) || [];
-  const handleTabChange = (tab: 'swatches' | 'formulas') => { setActiveTab(tab); setActiveId(null); setEditingId(null); };
 
   return (
     <>
@@ -182,7 +192,7 @@ export default function Library() {
                                     <div className="flex-shrink-0 w-12 h-12 rounded-full border-4 border-white shadow-md ring-1 ring-gray-100" style={{ backgroundColor: swatch.hex }} />
                                     {editingId === swatch.id ? (<div className="flex items-center gap-1 flex-grow" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(swatch.id!, 'swatch')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="min-w-0 flex-grow"><div className="font-bold text-navy-900 text-sm flex items-center gap-2 truncate">{swatch.name}<button onClick={(e) => { e.stopPropagation(); startEditing(swatch.id!, swatch.name); }} className={`transition-all ${activeId === swatch.id ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto'} text-gray-400 hover:text-navy-900`}><Edit2 size={12}/></button></div><div className="text-[10px] text-gray-500 font-mono uppercase bg-gray-50 inline-block px-1.5 rounded mt-0.5 border border-gray-100">{swatch.hex}</div></div>)}
                                 </div>
-                                {/* BUTTONS WRAPPER: Fixed accidental touch trigger via pointer-events */}
+                                {/* VISIBILITY FIX: pointer-events-none/auto applied here */}
                                 <div className={`flex gap-1 pl-2 transition-all duration-300 ${
                                     activeId === swatch.id 
                                     ? 'opacity-100 translate-x-0 pointer-events-auto' 
@@ -216,7 +226,7 @@ export default function Library() {
                             <div key={formula.id} onClick={() => toggleActive(formula.id!)} className={`p-5 rounded-xl border transition-all duration-300 flex flex-col h-full cursor-pointer ${activeId === formula.id ? 'border-navy-500 bg-navy-50/10 shadow-md' : 'border-gray-100 bg-white hover:border-navy-200'}`}>
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="flex-grow min-w-0 pr-2">
-                                        {editingId === formula.id ? (<div className="flex items-center gap-1 mb-1" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(formula.id!, 'formula')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="font-bold text-navy-900 flex items-center gap-2 text-base truncate"><div className="bg-navy-50 p-1.5 rounded-md"><Droplet size={16} className="text-gold-500 flex-shrink-0" /></div><span className="truncate">{formula.name}</span><button onClick={(e) => { e.stopPropagation(); startEditing(formula.id!, formula.name); }} className={`transition-all ${activeId === formula.id ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto'} text-gray-400 hover:text-navy-900`}><Edit2 size={12}/></button></div>)}
+                                        {editingId === formula.id ? (<div className="flex items-center gap-1 mb-1" onClick={e => e.stopPropagation()}><input className="bg-white border border-gold-500 rounded px-2 py-1 text-sm w-full outline-none shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /><button onClick={() => saveRename(formula.id!, 'formula')} className="text-white bg-green-500 hover:bg-green-600 p-1 rounded shadow-sm"><Check size={16}/></button></div>) : (<div className="font-bold text-navy-900 flex items-center gap-2 text-base truncate"><div className="bg-navy-50 p-1.5 rounded-md"><Droplet size={16} className="text-gold-500 flex-shrink-0" /></div><span className="truncate" title={formula.name}>{formula.name}</span><button onClick={(e) => { e.stopPropagation(); startEditing(formula.id!, formula.name); }} className={`transition-all ${activeId === formula.id ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto'} text-gray-400 hover:text-navy-900`}><Edit2 size={12}/></button></div>)}
                                         <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-wider font-medium flex gap-2"><span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 border border-gray-200">Batch: {formula.batchSize}{formula.unit}</span></div>
                                     </div>
                                     {/* DELETE FORMULA BUTTON: pointer-events fix */}
