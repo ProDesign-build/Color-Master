@@ -29,9 +29,6 @@ export const db = new LeatherDB();
 
 // --- SHARED UTILITIES ---
 
-/**
- * Creates the JSON backup string from current DB data.
- */
 const createBackupJSON = async () => {
     const s = await db.swatches.toArray();
     const f = await db.formulas.toArray();
@@ -43,9 +40,6 @@ const createBackupJSON = async () => {
     }, null, 2);
 };
 
-/**
- * Standard browser download fallback.
- */
 const downloadBackupBlob = (jsonStr: string) => {
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -59,9 +53,6 @@ const downloadBackupBlob = (jsonStr: string) => {
     URL.revokeObjectURL(url);
 };
 
-/**
- * Wipes the database completely.
- */
 export const resetDatabase = async () => {
   return db.transaction('rw', db.swatches, db.formulas, db.meta, async () => {
       await db.swatches.clear();
@@ -71,8 +62,8 @@ export const resetDatabase = async () => {
 };
 
 /**
- * Action: Export Copy
- * Manually trigger a fresh JSON download.
+ * Action: Export Fresh Copy
+ * This remains for when you specifically WANT a new file download.
  */
 export const triggerBackupDownload = async () => {
     try {
@@ -80,26 +71,20 @@ export const triggerBackupDownload = async () => {
         downloadBackupBlob(json);
         return true;
     } catch(e) { 
-        console.error("Export Copy failed", e);
         return false; 
     }
 };
 
 // --- MANUAL FILE SYNC LOGIC ---
 
-/**
- * Pick and link a specific file on the user's disk.
- */
 export const linkBackupFile = async () => {
     if (!('showSaveFilePicker' in window)) {
-        throw new Error("Your browser does not support file linking. Please use Export Copy.");
+        throw new Error("Your browser does not support file linking.");
     }
-    
     const opts = {
         suggestedName: 'ColourMaster_Library.json',
         types: [{ description: 'JSON Library File', accept: { 'application/json': ['.json'] } }],
     };
-    
     // @ts-ignore
     const handle = await window.showSaveFilePicker(opts);
     await db.meta.put({ key: 'backupHandle', handle });
@@ -108,54 +93,46 @@ export const linkBackupFile = async () => {
 
 /**
  * Action: Update Backup File
- * Overwrites the linked file or prompts to create one.
+ * STRICTLY OVERWRITES the linked file. No downloads.
  */
 export const performManualOverwrite = async () => {
     try {
         const jsonStr = await createBackupJSON();
 
-        // 1. Check for existing handle
+        // 1. Get the handle
         const record = await db.meta.get('backupHandle');
         
         if (record && record.handle) {
             const handle = record.handle as FileSystemFileHandle;
             
-            // Verify permission (triggers prompt if necessary)
+            // 2. Request permission (Forces the browser "Allow changes?" prompt)
             // @ts-ignore
-            const perm = await handle.queryPermission({ mode: 'readwrite' });
-            if (perm !== 'granted') {
-                 // @ts-ignore
-                 const newPerm = await handle.requestPermission({ mode: 'readwrite' });
-                 if (newPerm !== 'granted') throw new Error("Permission denied");
+            const perm = await handle.requestPermission({ mode: 'readwrite' });
+            
+            if (perm === 'granted') {
+                // 3. Write specifically to that existing file path
+                const writable = await handle.createWritable();
+                await writable.write(jsonStr);
+                await writable.close();
+                console.log("✔ File overwritten");
+                return "overwritten";
+            } else {
+                return "denied";
             }
-
-            // Write to existing file
-            const writable = await handle.createWritable();
-            await writable.write(jsonStr);
-            await writable.close();
-            console.log("✔ Backup file updated");
-            return "overwritten";
         }
 
-        // 2. No handle found? Setup a new one
+        // 4. If no handle exists, ask user to pick/create the file first
         if ('showSaveFilePicker' in window) {
-            const newHandle = await linkBackupFile();
-            // @ts-ignore
-            const writable = await newHandle.createWritable();
-            await writable.write(jsonStr);
-            await writable.close();
-            return "created";
+            await linkBackupFile();
+            // Try again now that we have a link
+            return await performManualOverwrite();
         }
 
-        // 3. Absolute Fallback (Standard Download)
-        downloadBackupBlob(jsonStr);
-        return "downloaded";
+        return "not-supported";
 
     } catch (e: any) {
-        console.error("Manual Backup failed", e);
-        // Fallback to download so user doesn't lose current state if disk write fails
-        const jsonStr = await createBackupJSON();
-        downloadBackupBlob(jsonStr);
-        return "fallback";
+        console.error("Overwrite failed:", e);
+        // Fallback removed to prevent unwanted downloads
+        return "error";
     }
 };
