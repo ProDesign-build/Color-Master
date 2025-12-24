@@ -12,10 +12,23 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
+
       plugins: [react()],
+
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+        }
+      },
+
+      // 👇 NEW SECTION: Forces filenames to be predictable for the Service Worker
+      build: {
+        rollupOptions: {
+          output: {
+            entryFileNames: `assets/index.js`,
+            chunkFileNames: `assets/index.js`,
+            assetFileNames: `assets/index.[ext]`,
+          }
         }
       }
     };
