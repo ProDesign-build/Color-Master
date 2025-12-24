@@ -61,10 +61,6 @@ export const resetDatabase = async () => {
   });
 };
 
-/**
- * Action: Export Fresh Copy
- * This remains for when you specifically WANT a new file download.
- */
 export const triggerBackupDownload = async () => {
     try {
         const json = await createBackupJSON();
@@ -93,46 +89,48 @@ export const linkBackupFile = async () => {
 
 /**
  * Action: Update Backup File
- * STRICTLY OVERWRITES the linked file. No downloads.
+ * FIXED: Detects if file was deleted on disk and clears stale handle.
  */
 export const performManualOverwrite = async () => {
     try {
         const jsonStr = await createBackupJSON();
-
-        // 1. Get the handle
         const record = await db.meta.get('backupHandle');
         
         if (record && record.handle) {
             const handle = record.handle as FileSystemFileHandle;
             
-            // 2. Request permission (Forces the browser "Allow changes?" prompt)
-            // @ts-ignore
-            const perm = await handle.requestPermission({ mode: 'readwrite' });
-            
-            if (perm === 'granted') {
-                // 3. Write specifically to that existing file path
-                const writable = await handle.createWritable();
-                await writable.write(jsonStr);
-                await writable.close();
-                console.log("✔ File overwritten");
-                return "overwritten";
-            } else {
-                return "denied";
+            try {
+                // Verify the physical file still exists and request write access
+                // @ts-ignore
+                const perm = await handle.requestPermission({ mode: 'readwrite' });
+                
+                if (perm === 'granted') {
+                    const writable = await handle.createWritable();
+                    await writable.write(jsonStr);
+                    await writable.close();
+                    return "overwritten";
+                } else {
+                    return "denied";
+                }
+            } catch (fileErr: any) {
+                // 👈 DETECT DELETED FILE:
+                // If the file was deleted or moved, requestPermission or createWritable throws an error
+                console.warn("Linked file is no longer accessible. Clearing handle.", fileErr);
+                await db.meta.delete('backupHandle'); 
+                return "file-missing"; 
             }
         }
 
-        // 4. If no handle exists, ask user to pick/create the file first
+        // If no handle exists (or was just deleted), prompt for a new one
         if ('showSaveFilePicker' in window) {
             await linkBackupFile();
-            // Try again now that we have a link
             return await performManualOverwrite();
         }
 
         return "not-supported";
 
     } catch (e: any) {
-        console.error("Overwrite failed:", e);
-        // Fallback removed to prevent unwanted downloads
+        console.error("Critical overwrite failed:", e);
         return "error";
     }
 };
