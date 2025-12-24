@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, triggerBackupDownload, performAutoBackup, resetDatabase, setupBackupHandle } from '../db';
+// 👇 Updated Import: Removed performAutoBackup, Added performSilentBackup
+import { db, triggerBackupDownload, performSilentBackup, resetDatabase, setupBackupHandle } from '../db';
 import { Book, Trash2, Download, Droplet, Edit2, Check, Search, X, Palette, Share2, Database, FileUp, FileDown, AlertTriangle, Settings, Power, FileJson } from 'lucide-react';
 import { colord } from 'colord';
 
@@ -60,20 +61,21 @@ export default function Library() {
       }
   };
 
-  const checkAndRunAutoBackup = () => {
+  // 👇 Updated Logic: Use performSilentBackup
+  const checkAndRunAutoBackup = async () => {
     if (localStorage.getItem('cm_auto_backup') === 'true') {
-        performAutoBackup();
+        await performSilentBackup();
     }
   };
 
   const deleteSwatch = async (id: number) => {
       await db.swatches.delete(id);
-      checkAndRunAutoBackup();
+      await checkAndRunAutoBackup();
   };
 
   const deleteFormula = async (id: number) => {
       await db.formulas.delete(id);
-      checkAndRunAutoBackup();
+      await checkAndRunAutoBackup();
   };
 
   const startEditing = (id: number, currentName: string) => {
@@ -88,7 +90,7 @@ export default function Library() {
         await db.formulas.update(id, { name: editName });
     }
     setEditingId(null);
-    checkAndRunAutoBackup();
+    await checkAndRunAutoBackup();
   };
 
   const toggleActive = (id: number) => {
@@ -141,7 +143,7 @@ export default function Library() {
               setShowDataModal(false);
               
               // Optionally backup after import to sync state
-              checkAndRunAutoBackup();
+              await checkAndRunAutoBackup();
 
           } catch (err) {
               console.error(err);
