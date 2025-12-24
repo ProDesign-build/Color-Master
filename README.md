@@ -28,7 +28,6 @@ A laboratory tool for calculating precise pigment ratios.
     * *Parts Mode:* Perfect for relative ratios (e.g., "3 parts Red, 1 part Blue").
 * **Batch Sizing:** Automatically calculates the exact volume (ml) or weight needed for every ingredient based on a target total batch size.
 * **Dynamic Recipe Building:** Add, remove, and rename pigments on the fly.
-* **Auto-Save:** Formulas are validated and saved to the local database with auto-backup support.
 
 ### 4. Digital Library (`Library` Tab)
 A persistent database powered by **IndexedDB** (via Dexie.js).
@@ -45,21 +44,6 @@ A persistent database powered by **IndexedDB** (via Dexie.js).
 * **Database:** IndexedDB (Dexie.js)
 * **Styling:** Tailwind CSS
 * **PWA:** Offline-first architecture
-
----
-
-## 🚀 Getting Started
-
-1.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-2.  **Set up environment:**
-    Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key.
-3.  **Run the app:**
-    ```bash
-    npm run dev
-    ```
 
 ---
 
