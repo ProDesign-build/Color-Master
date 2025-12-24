@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Camera, Beaker, Book, CheckCircle, AlertTriangle, HardDrive } from 'lucide-react';
+import { Palette, Camera, Beaker, Book } from 'lucide-react';
 import ColorCanvas from './components/ColorCanvas';
 import LeatherPreview from './components/LeatherPreview';
 import MixingCalculator from './components/MixingCalculator';
@@ -7,13 +7,7 @@ import Library from './components/Library';
 import ColorWheel from './components/ColorWheel';
 import { ConfirmDialog, DialogState } from './components/ConfirmDialog';
 import { ViewState } from './types';
-import { 
-  db, 
-  performSilentBackup, 
-  checkBackupStatus, 
-  reconnectBackup, 
-  setupBackupHandle 
-} from './db';
+import { db } from './db'; // 👈 CLEAN IMPORT
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ViewState>('preview');
@@ -30,13 +24,11 @@ const App: React.FC = () => {
     message: ''
   });
 
-  // Backup Connection State ('none' = no file linked, 'connected' = ready, 'disconnected' = permission lost)
-  const [backupStatus, setBackupStatus] = useState<'connected' | 'disconnected' | 'none'>('none');
-
-  // --- PERSISTENCE & BACKUP STATUS CHECK ---
+  // --- PERSISTENCE CHECK ---
   useEffect(() => {
     const initPersistence = async () => {
-      // 1. Browser Persistence (Storage Manager)
+      // Browser Persistence (Storage Manager)
+      // This asks the browser not to auto-delete data if space runs low
       if (navigator.storage && navigator.storage.persist) {
         const isPersisted = await navigator.storage.persisted();
         if (!isPersisted) {
@@ -44,10 +36,6 @@ const App: React.FC = () => {
           console.log(`Storage persistence enabled: ${result}`);
         }
       }
-
-      // 2. Check File System Access Status
-      const status = await checkBackupStatus();
-      setBackupStatus(status);
     };
     initPersistence();
   }, []);
@@ -60,7 +48,7 @@ const App: React.FC = () => {
     setDialog(prev => ({ ...prev, isOpen: false }));
   };
 
-  // --- SAVE LOGIC WITH SILENT BACKUP ---
+  // --- INSTANT SAVE LOGIC (No Backup Lag) ---
   const performSave = async () => {
     try {
         // 1. Save to IndexedDB (Instant)
@@ -70,19 +58,7 @@ const App: React.FC = () => {
             createdAt: Date.now()
         });
         
-        // 2. Attempt Silent Sync to Disk
-        // If successful, status becomes 'connected'.
-        // If failed (permission needed), it returns false.
-        const success = await performSilentBackup();
-        
-        if (success) {
-            setBackupStatus('connected');
-        } else {
-            // Re-check status to see if we really lost permission or if it was just not set up
-            const currentStatus = await checkBackupStatus();
-            setBackupStatus(currentStatus); 
-        }
-
+        // 2. Reset UI
         setSaveName('');
         setShowSaveDialog(false);
         closeDialog(); // Close any open confirmation dialogs
@@ -138,27 +114,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- BACKUP ICON CLICK HANDLER ---
-  const handleBackupIconClick = async () => {
-    if (backupStatus === 'none') {
-        // Case A: First time setup (User picks a file)
-        try {
-            await setupBackupHandle();
-            await performSilentBackup(); // Save immediately to confirm it works
-            setBackupStatus('connected');
-        } catch (e) { 
-            console.log("Setup cancelled or failed", e); 
-        }
-    } else if (backupStatus === 'disconnected') {
-        // Case B: Reconnect (Trigger Browser Permission Prompt)
-        const reconnected = await reconnectBackup();
-        if (reconnected) {
-            setBackupStatus('connected');
-        }
-    }
-    // Case C: 'connected' -> Do nothing (or maybe show "Synced" toast)
-  };
-
   return (
     <div className="min-h-screen bg-cream-50 text-navy-900 font-sans flex flex-col lg:flex-row overflow-hidden">
       
@@ -179,37 +134,6 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4">
-                
-                {/* --- BACKUP STATUS INDICATOR --- */}
-                {/* Only shows if browser supports File System Access (Chrome/Edge/Desktop) */}
-                {'showSaveFilePicker' in window && (
-                    <button 
-                        onClick={handleBackupIconClick}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${
-                            backupStatus === 'connected' ? 'bg-green-50 border-green-200 hover:bg-green-100' :
-                            backupStatus === 'disconnected' ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 animate-pulse' :
-                            'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                        }`}
-                        title={
-                            backupStatus === 'connected' ? "Backup Active (Synced to Disk)" :
-                            backupStatus === 'disconnected' ? "Backup Paused - Permission Lost (Click to Reconnect)" : 
-                            "No Backup File - Data strictly local (Click to Connect)"
-                        }
-                    >
-                        {backupStatus === 'connected' && <CheckCircle size={14} className="text-green-600" />}
-                        {backupStatus === 'disconnected' && <AlertTriangle size={14} className="text-amber-500" />}
-                        {backupStatus === 'none' && <HardDrive size={14} className="text-gray-400" />}
-                        
-                        <span className={`text-[10px] font-bold uppercase tracking-wider hidden sm:block ${
-                            backupStatus === 'connected' ? 'text-green-700' : 
-                            backupStatus === 'disconnected' ? 'text-amber-700' : 'text-gray-400'
-                        }`}>
-                            {backupStatus === 'connected' ? 'Synced' : 
-                             backupStatus === 'disconnected' ? 'Reconnect' : 'Save to Disk'}
-                        </span>
-                    </button>
-                )}
-
                 <div className="hidden sm:flex flex-col items-end">
                     <div className="text-xs font-mono font-bold text-navy-800">{currentColor.toUpperCase()}</div>
                     <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Current Profile</div>
@@ -222,11 +146,7 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        {/* Main Scroll Container:
-            - For Library: overflow-hidden because Library handles its own internal scroll.
-            - For others: overflow-y-auto to let the page scroll.
-            - pb-32: Adds bottom padding on mobile so content isn't hidden by the fixed nav.
-        */}
+        {/* Main Scroll Container */}
         <div className={`flex-grow p-4 md:p-8 lg:p-10 ${
             activeTab === 'library' 
             ? 'overflow-hidden h-full' 
