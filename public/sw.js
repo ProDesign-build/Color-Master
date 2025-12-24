@@ -1,88 +1,87 @@
 /**
- * Colour Master - Service Worker
- * Version: v12 (Dynamic Strategy)
+ * Colour Master - Final Production Service Worker
+ * Version: v15 (Bulletproof Strategy)
  */
 
-const CACHE_NAME = 'colour-master-v12'; 
+const CACHE_NAME = 'colour-master-v15'; 
 
-// Core files that must be available to boot the app
 const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+
+  // 1. External Styling & Fonts
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap',
+  
+  // 2. Textures (Essential for the UI)
   'https://i.postimg.cc/TdFZ8Kpq/Vector-Smart-Object.png',
-  'https://i.postimg.cc/jRL3h8sN/Texture-v1.jpg'
+  'https://i.postimg.cc/jRL3h8sN/Texture-v1.jpg',
+
+  // 3. App Logic (ESM.sh Dependencies)
+  // Ensure these match your index.html import map exactly!
+  'https://esm.sh/react@19.0.0',
+  'https://esm.sh/react-dom@19.0.0',
+  'https://esm.sh/lucide-react@0.460.0',
+  'https://esm.sh/dexie@4.0.8',
+  'https://esm.sh/dexie-react-hooks@4.0.2',
+  'https://esm.sh/colord@2.9.3'
 ];
 
-// Install Event: Pre-cache the "Skeleton"
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching core assets');
-      return cache.addAll(PRECACHE_URLS);
+      // Use "addAll" but catch errors so one failing icon doesn't stop the whole SW
+      return Promise.allSettled(
+        PRECACHE_URLS.map(url => cache.add(url))
+      );
     })
   );
   self.skipWaiting();
 });
 
-// Activate Event: Clean up old versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keys) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       );
     }).then(() => self.clients.claim())
   );
 });
 
-// Fetch Event: Handling Offline & Dynamic Caching
+
+
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests (like database syncs or analytics)
   if (event.request.method !== 'GET') return;
 
-  // --- STRATEGY 1: Navigation (HTML) ---
-  // Always try network first so user sees updates, fallback to index.html if offline
+  // Navigation: Network-First (to get updates), fallback to cached index.html
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('./index.html') || caches.match('./');
-      })
+      fetch(event.request).catch(() => caches.match('./index.html'))
     );
     return;
   }
 
-  // --- STRATEGY 2: Assets (JS, CSS, Images) ---
-  // Cache-First, then Network (with dynamic caching for Vite hashed files)
+  // Assets: Cache-First, then Network
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      if (cachedResponse) return cachedResponse;
 
       return fetch(event.request).then((networkResponse) => {
-        // Don't cache invalid responses or cross-origin errors
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+        // FIXED: Removed the 'type !== basic' restriction to allow ESM.sh and PostImg (CORS)
+        if (!networkResponse || networkResponse.status !== 200) {
           return networkResponse;
         }
 
-        // Dynamic Caching: Save Vite's new assets automatically as they load
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
         });
 
         return networkResponse;
-      }).catch(() => {
-        // Final fallback if both fail
-        return new Response('Offline content not available', { status: 503 });
       });
     })
   );
