@@ -1,6 +1,17 @@
 import Dexie, { type Table } from 'dexie';
 import { Swatch, Formula } from './types';
 
+// Add this interface to satisfy TypeScript for the File System Access API
+interface FileSystemFileHandle {
+  createWritable(): Promise<FileSystemWritableFileStream>;
+  queryPermission(descriptor: { mode: string }): Promise<PermissionState>;
+  requestPermission(descriptor: { mode: string }): Promise<PermissionState>;
+}
+interface FileSystemWritableFileStream extends WritableStream {
+  write(data: any): Promise<void>;
+  close(): Promise<void>;
+}
+
 // The LeatherDB class extends Dexie to define the database schema and provide type safety.
 export class LeatherDB extends Dexie {
   swatches!: Table<Swatch, number>;
@@ -48,7 +59,7 @@ const createBackupJSON = async () => {
 };
 
 /**
- * Helper to download via blob (Fallback method)
+ * Helper to download via blob (Fallback method for Manual Exports)
  */
 const downloadBackupBlob = (jsonStr: string) => {
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -67,57 +78,6 @@ const downloadBackupBlob = (jsonStr: string) => {
 };
 
 /**
- * Perform Auto-Backup.
- * Tries to overwrite existing file handle if available (Chrome/Edge Desktop).
- * Falls back to downloading a new file if not.
- */
-export const performAutoBackup = async () => {
-  try {
-    const jsonStr = await createBackupJSON();
-    
-    // 1. Check for stored File Handle (FileSystem Access API)
-    // Only supported in secure contexts and modern browsers
-    if ('showSaveFilePicker' in window) {
-        const record = await db.meta.get('backupHandle');
-        if (record && record.handle) {
-            const handle = record.handle as FileSystemFileHandle;
-            
-            // 2. Try to write to handle
-            try {
-                // Check permissions - if we are in a user gesture (save button click), we can request it.
-                // If not, this might fail or prompt.
-                const options = { mode: 'readwrite' };
-                // @ts-ignore
-                if ((await handle.queryPermission(options)) !== 'granted') {
-                    // @ts-ignore
-                    if ((await handle.requestPermission(options)) !== 'granted') {
-                        throw new Error("Permission denied");
-                    }
-                }
-
-                const writable = await handle.createWritable();
-                await writable.write(jsonStr);
-                await writable.close();
-                console.log("Auto-backup overwritten successfully.");
-                return true;
-            } catch (err) {
-                console.warn("File System Access write failed (handle might be stale or permission denied), falling back to download.", err);
-                // If handle is bad, maybe clear it? For now, just fallback.
-            }
-        }
-    }
-
-    // 3. Fallback: Download new file
-    downloadBackupBlob(jsonStr);
-    return true;
-
-  } catch (err) {
-    console.error("Backup generation failed", err);
-    return false;
-  }
-};
-
-/**
  * Wipes the database completely.
  */
 export const resetDatabase = async () => {
@@ -129,15 +89,15 @@ export const resetDatabase = async () => {
 };
 
 /**
- * Setup File Handle for Auto-Backup
+ * Setup File Handle for Auto-Backup (Initial Connection)
  */
 export const setupBackupHandle = async () => {
     if (!('showSaveFilePicker' in window)) {
-        throw new Error("Your browser does not support file overwriting. Auto-backup will create new files.");
+        throw new Error("Your browser does not support file overwriting. Please use manual export.");
     }
     
     const opts = {
-        suggestedName: 'ColourMaster_AutoBackup.json',
+        suggestedName: 'ColourMaster_Sync.json',
         types: [{
             description: 'JSON Backup File',
             accept: { 'application/json': ['.json'] },
@@ -153,7 +113,7 @@ export const setupBackupHandle = async () => {
 };
 
 /**
- * Manually trigger download (Export)
+ * Manually trigger download (Export) - e.g. for "Save Copy" button
  */
 export const triggerBackupDownload = async () => {
     try {
@@ -162,3 +122,77 @@ export const triggerBackupDownload = async () => {
         return true;
     } catch(e) { return false; }
 };
+
+// --- SYNC-TO-DISK STRATEGY (Silent & Safe) ---
+
+/**
+ * Run this on App Start to check connection.
+ * Returns: 'connected' | 'disconnected' | 'none'
+ */
+export const checkBackupStatus = async (): Promise<'connected' | 'disconnected' | 'none'> => {
+  try {
+    const record = await db.meta.get('backupHandle');
+    if (!record || !record.handle) return 'none';
+
+    const handle = record.handle as FileSystemFileHandle;
+    
+    // Check permission state without asking
+    // @ts-ignore
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    
+    return perm === 'granted' ? 'connected' : 'disconnected';
+  } catch (error) {
+    return 'none';
+  }
+};
+
+/**
+ * The "Silent" Sync.
+ * Call this after every save.
+ * Returns true if saved, false if permission needed (show warning).
+ */
+export const performSilentBackup = async () => {
+  try {
+    const record = await db.meta.get('backupHandle');
+    if (!record || !record.handle) return false; // No file set up yet
+
+    const handle = record.handle as FileSystemFileHandle;
+    const jsonStr = await createBackupJSON();
+
+    // 1. Check Permission
+    // @ts-ignore
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    
+    if (perm === 'granted') {
+      // 2. Write Silently (User sees nothing, data is safe)
+      const writable = await handle.createWritable();
+      await writable.write(jsonStr);
+      await writable.close();
+      console.log("✔ Silent Backup to Disk Successful");
+      return true;
+    } else {
+      // 3. Permission Lost - Do NOT prompt automatically. Return false to trigger UI warning.
+      console.warn("⚠ Backup Permission Lost");
+      return false; 
+    }
+  } catch (err) {
+    console.error("Backup failed", err);
+    return false;
+  }
+};
+
+/**
+ * Call this when the user clicks the "Reconnect" warning icon.
+ * This triggers the browser prompt.
+ */
+export const reconnectBackup = async () => {
+    const record = await db.meta.get('backupHandle');
+    if (record && record.handle) {
+         const handle = record.handle as FileSystemFileHandle;
+         // This WILL trigger the browser prompt because it's inside a click handler
+         // @ts-ignore
+         await handle.requestPermission({ mode: 'readwrite' });
+         return await performSilentBackup(); // Try saving again immediately
+    }
+    return false;
+}
