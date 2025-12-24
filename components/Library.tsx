@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-// 👇 Updated Import: Removed performAutoBackup, Added performSilentBackup
-import { db, triggerBackupDownload, performSilentBackup, resetDatabase, setupBackupHandle } from '../db';
-import { Book, Trash2, Download, Droplet, Edit2, Check, Search, X, Palette, Share2, Database, FileUp, FileDown, AlertTriangle, Settings, Power, FileJson } from 'lucide-react';
+// 👇 Updated Imports: Uses the new manual overwrite logic
+import { db, performManualOverwrite, resetDatabase } from '../db';
+import { Book, Trash2, Download, Droplet, Edit2, Check, Search, X, Palette, Share2, Database, FileUp, FileDown, AlertTriangle, Power, Save, RefreshCw } from 'lucide-react';
 import { colord } from 'colord';
 
 export default function Library() {
@@ -22,60 +22,26 @@ export default function Library() {
 
   // Backup/Restore State
   const [showDataModal, setShowDataModal] = useState(false);
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
-  const [hasFileHandle, setHasFileHandle] = useState(false);
-  const [browserSupportsFSA, setBrowserSupportsFSA] = useState(false);
+  const [hasLinkedFile, setHasLinkedFile] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Check if we have a linked file when modal opens
   useEffect(() => {
-    // Load preference
-    setAutoBackupEnabled(localStorage.getItem('cm_auto_backup') === 'true');
-    setBrowserSupportsFSA('showSaveFilePicker' in window);
-    
-    // Check if we have a handle stored
-    const checkHandle = async () => {
+    const checkLink = async () => {
         const rec = await db.meta.get('backupHandle');
-        setHasFileHandle(!!rec);
+        setHasLinkedFile(!!rec);
     };
-    checkHandle();
+    if (showDataModal) checkLink();
   }, [showDataModal]);
 
-  const toggleAutoBackup = () => {
-      const newState = !autoBackupEnabled;
-      setAutoBackupEnabled(newState);
-      localStorage.setItem('cm_auto_backup', newState ? 'true' : 'false');
-  };
-
-  const linkBackupFile = async () => {
-      try {
-          await setupBackupHandle();
-          setHasFileHandle(true);
-          // Auto-enable backup if setting up file
-          if (!autoBackupEnabled) toggleAutoBackup();
-          alert("Backup file linked! Future saves will attempt to overwrite this file.");
-      } catch (e: any) {
-          console.error(e);
-          if (e.name !== 'AbortError') {
-            alert(e.message || "Could not link file.");
-          }
-      }
-  };
-
-  // 👇 Updated Logic: Use performSilentBackup
-  const checkAndRunAutoBackup = async () => {
-    if (localStorage.getItem('cm_auto_backup') === 'true') {
-        await performSilentBackup();
-    }
-  };
-
+  // 👇 FAST DELETE: No longer triggers auto-backup
   const deleteSwatch = async (id: number) => {
       await db.swatches.delete(id);
-      await checkAndRunAutoBackup();
   };
 
   const deleteFormula = async (id: number) => {
       await db.formulas.delete(id);
-      await checkAndRunAutoBackup();
   };
 
   const startEditing = (id: number, currentName: string) => {
@@ -83,6 +49,7 @@ export default function Library() {
     setEditName(currentName);
   };
 
+  // 👇 FAST RENAME: No longer triggers auto-backup
   const saveRename = async (id: number, type: 'swatch' | 'formula') => {
     if (type === 'swatch') {
         await db.swatches.update(id, { name: editName });
@@ -90,7 +57,6 @@ export default function Library() {
         await db.formulas.update(id, { name: editName });
     }
     setEditingId(null);
-    await checkAndRunAutoBackup();
   };
 
   const toggleActive = (id: number) => {
@@ -98,17 +64,30 @@ export default function Library() {
     setActiveId(prev => prev === id ? null : id);
   };
 
-  const handleExportBackup = async () => {
-    const success = await triggerBackupDownload();
-    if (!success) {
-        alert("Failed to generate backup file.");
+  // --- MANUAL BACKUP HANDLER ---
+  const handleManualBackup = async () => {
+    setIsBackingUp(true);
+    // This function handles the logic: Overwrite if exists, Create if new
+    const result = await performManualOverwrite();
+    setIsBackingUp(false);
+    
+    if (result === 'overwritten') {
+        alert("Success! Your linked backup file has been updated.");
+    } else if (result === 'created') {
+        alert("Success! New backup file created and linked.");
+        setHasLinkedFile(true);
+    } else if (result === 'fallback') {
+        // Mobile or Firefox usually hits this
+        alert("Backup downloaded successfully.");
+    } else if (result === 'downloaded') {
+        alert("Backup downloaded.");
     }
   };
 
   const handleResetDatabase = async () => {
     if (confirm("WARNING: ALL DATA WILL BE DELETED.\n\nThis action cannot be undone. Are you absolutely sure you want to clear your entire library?")) {
         await resetDatabase();
-        setHasFileHandle(false);
+        setHasLinkedFile(false);
         setShowDataModal(false);
         alert("Library has been reset.");
     }
@@ -141,9 +120,6 @@ export default function Library() {
 
               alert(`Successfully imported ${json.data.swatches.length} swatches and ${json.data.formulas.length} formulas.`);
               setShowDataModal(false);
-              
-              // Optionally backup after import to sync state
-              await checkAndRunAutoBackup();
 
           } catch (err) {
               console.error(err);
@@ -301,13 +277,25 @@ export default function Library() {
                     <div>
                         <h4 className="text-xs font-bold uppercase text-navy-900 mb-3 tracking-wider">Backup & Restore</h4>
                         <div className="grid grid-cols-2 gap-4">
-                            <button onClick={handleExportBackup} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-navy-900 hover:bg-navy-50 transition-all group">
-                                <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform"><FileDown className="text-navy-900" size={24} /></div>
-                                <span className="text-xs font-bold uppercase text-navy-900">Export Backup</span>
+                            {/* Primary Action: Update/Create Linked File */}
+                            <button 
+                                onClick={handleManualBackup}
+                                disabled={isBackingUp}
+                                className={`flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed transition-all group col-span-2 ${hasLinkedFile ? 'border-green-200 bg-green-50 hover:bg-green-100' : 'border-gray-200 hover:border-navy-900 hover:bg-navy-50'}`}
+                            >
+                                <div className={`p-3 rounded-full shadow-sm group-hover:scale-110 transition-transform ${hasLinkedFile ? 'bg-white text-green-700' : 'bg-white text-navy-900'}`}>
+                                    {isBackingUp ? <RefreshCw className="animate-spin" size={24} /> : (hasLinkedFile ? <Save size={24} /> : <FileDown size={24} />)}
+                                </div>
+                                <span className={`text-xs font-bold uppercase ${hasLinkedFile ? 'text-green-800' : 'text-navy-900'}`}>
+                                    {isBackingUp ? 'Saving...' : (hasLinkedFile ? 'Update Backup File' : 'Save to Disk')}
+                                </span>
+                                {hasLinkedFile && <span className="text-[10px] text-green-600 -mt-2">Overwrites linked file</span>}
                             </button>
+
+                            {/* Secondary Actions */}
                             <button onClick={() => importInputRef.current?.click()} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-gold-500 hover:bg-gold-50 transition-all group">
                                 <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform"><FileUp className="text-gold-600" size={24} /></div>
-                                <span className="text-xs font-bold uppercase text-navy-900">Restore Library</span>
+                                <span className="text-xs font-bold uppercase text-navy-900">Restore</span>
                             </button>
                             <input type="file" ref={importInputRef} className="hidden" accept="application/json" onChange={handleImportBackup} />
                         </div>
@@ -315,57 +303,12 @@ export default function Library() {
 
                     <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 flex gap-2">
                         <AlertTriangle size={16} className="text-yellow-600 shrink-0 mt-0.5" />
-                        <span className="text-[10px] text-yellow-800 font-medium leading-tight">Importing will merge data. Existing items are preserved.</span>
+                        <span className="text-[10px] text-yellow-800 font-medium leading-tight">Restore merges data. Existing items are preserved.</span>
                     </div>
 
                     <hr className="border-gray-100" />
 
-                    {/* SECTION 2: Settings */}
-                    <div>
-                         <h4 className="text-xs font-bold uppercase text-navy-900 mb-3 tracking-wider flex items-center gap-2"><Settings size={12} /> Auto-Backup</h4>
-                         
-                         <div className="flex flex-col gap-4">
-                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                 <div className="flex flex-col">
-                                     <span className="text-sm font-bold text-navy-900">Enable on Save/Edit</span>
-                                     <span className="text-[10px] text-gray-500">Auto-update backup on create, delete, or rename.</span>
-                                 </div>
-                                 <button onClick={toggleAutoBackup} className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${autoBackupEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
-                                     <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-200 ${autoBackupEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
-                                 </button>
-                             </div>
-
-                             {/* File Handle Setup */}
-                             {browserSupportsFSA ? (
-                                 <div className={`p-3 rounded-lg border flex items-center justify-between transition-colors ${hasFileHandle ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                                     <div className="flex flex-col">
-                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-navy-900">Single File Backup</span>
-                                            {hasFileHandle && <Check size={12} className="text-green-600" />}
-                                         </div>
-                                         <span className="text-[10px] text-gray-500">
-                                            {hasFileHandle ? 'Linked. Backups will overwrite this file.' : 'Link a file to avoid multiple downloads.'}
-                                         </span>
-                                     </div>
-                                     <button 
-                                        onClick={linkBackupFile}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-bold shadow-sm transition-colors ${hasFileHandle ? 'bg-white text-green-700 border border-green-200' : 'bg-navy-900 text-gold-500'}`}
-                                     >
-                                        {hasFileHandle ? 'Update Link' : 'Link File'}
-                                     </button>
-                                 </div>
-                             ) : (
-                                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[10px] text-gray-500 flex gap-2">
-                                     <FileJson size={16} className="shrink-0" />
-                                     <span>Your browser does not support single-file overwriting. New files will be created for each backup.</span>
-                                 </div>
-                             )}
-                         </div>
-                    </div>
-
-                    <hr className="border-gray-100" />
-
-                    {/* SECTION 3: Danger Zone */}
+                    {/* SECTION 2: Danger Zone */}
                     <div>
                          <h4 className="text-xs font-bold uppercase text-red-600 mb-3 tracking-wider">Danger Zone</h4>
                          <button onClick={handleResetDatabase} className="w-full flex items-center justify-center gap-2 p-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-bold text-sm">
