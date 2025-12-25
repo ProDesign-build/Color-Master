@@ -1,6 +1,6 @@
 {
-  "name": "Colour Master",
-  "short_name": "CM Tools",
+  "name": "Color Master",
+  "short_name": "ColorMaster",
   "start_url": "/Color-Master/",
   "scope": "/Color-Master/",       
   "display": "standalone",
