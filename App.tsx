@@ -128,7 +128,7 @@ const App: React.FC = () => {
         <header className="bg-white border-b border-cream-100 p-4 lg:px-8 flex justify-between items-center z-10">
             <div>
                 <h1 className="text-xl lg:text-2xl font-serif font-bold text-navy-900">
-                    <span className="text-gold-500">Colour</span>Master
+                    <span className="text-gold-500">Color</span>Master
                 </h1>
                 <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Pigment Artisan Tool</p>
             </div>
