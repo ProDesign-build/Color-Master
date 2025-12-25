@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "license": "UNLICENSED",
+  "description": "Proprietary software. All rights reserved by the owner.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
